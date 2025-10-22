@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { createSuccessResponse, createErrorResponse } from '@/lib/utils/api';
 import { vapi } from '@/lib/vapi/client';
 import { supabaseAdmin } from '@/lib/supabase/client';
+import { getVapiFunctionsUrl, getAppUrl, getEnvironmentInfo } from '@/lib/utils/url';
 
 /**
  * POST /api/vapi/test/provision
@@ -23,24 +24,20 @@ export async function POST(request: NextRequest) {
     // ======================================================================
     // PRE-FLIGHT CHECK: Validate Public URL
     // ======================================================================
-    // Accept tunnel URL from request body as override (for when env vars aren't passed between processes)
-    const shopifyAppUrl = tunnelUrl || process.env.SHOPIFY_APP_URL;
-    const nextPublicUrl = process.env.NEXT_PUBLIC_APP_URL;
+    // Get environment information for debugging
+    const envInfo = getEnvironmentInfo();
     
     console.log(`[${requestId}] ═══════════════════════════════════════`);
     console.log(`[${requestId}] 🔍 Environment Check:`);
     console.log(`[${requestId}]    Tunnel URL (from request): ${tunnelUrl || 'NOT PROVIDED'}`);
-    console.log(`[${requestId}]    SHOPIFY_APP_URL (env): ${process.env.SHOPIFY_APP_URL || 'NOT SET'}`);
-    console.log(`[${requestId}]    NEXT_PUBLIC_APP_URL (env): ${nextPublicUrl || 'NOT SET'}`);
-    console.log(`[${requestId}]    Using: ${shopifyAppUrl || nextPublicUrl}`);
+    console.log(`[${requestId}]    Environment Info:`, JSON.stringify(envInfo, null, 2));
     
-    // Determine which URL to use
-    const serverBaseUrl = shopifyAppUrl || nextPublicUrl;
+    // Use tunnel URL if provided, otherwise use environment-based URL
+    const serverBaseUrl = tunnelUrl || getAppUrl();
+    const functionUrl = getVapiFunctionsUrl();
     
-    if (!serverBaseUrl) {
-      console.error(`[${requestId}] ❌ ERROR: No app URL configured`);
-      return createErrorResponse(new Error('Configuration error: No app URL found in environment variables'));
-    }
+    console.log(`[${requestId}]    Final App URL: ${serverBaseUrl}`);
+    console.log(`[${requestId}]    Final Function URL: ${functionUrl}`);
     
     // WARNING: Check if using localhost (might not work for Vapi callbacks)
     if (serverBaseUrl.includes('localhost') || serverBaseUrl.includes('127.0.0.1')) {
@@ -62,7 +59,6 @@ export async function POST(request: NextRequest) {
       // Vapi will give the real error if callbacks fail
     }
     
-    const functionUrl = `${serverBaseUrl}/api/vapi/functions`;
     console.log(`[${requestId}] ✅ Public URL validated: ${functionUrl}`);
     console.log(`[${requestId}] ═══════════════════════════════════════`);
 
