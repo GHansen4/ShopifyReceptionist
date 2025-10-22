@@ -32,10 +32,22 @@ export async function POST(request: NextRequest) {
     console.log(`[${requestId}]    Tunnel URL (from request): ${tunnelUrl || 'NOT PROVIDED'}`);
     console.log(`[${requestId}]    Environment Info:`, JSON.stringify(envInfo, null, 2));
     
+    // DEBUG: Check individual environment variables
+    console.log(`[${requestId}] 🔍 Raw Environment Variables:`);
+    console.log(`[${requestId}]    process.env.NEXT_PUBLIC_APP_URL: ${process.env.NEXT_PUBLIC_APP_URL}`);
+    console.log(`[${requestId}]    process.env.VERCEL_URL: ${process.env.VERCEL_URL}`);
+    console.log(`[${requestId}]    process.env.SHOPIFY_APP_URL: ${process.env.SHOPIFY_APP_URL}`);
+    console.log(`[${requestId}]    process.env.NODE_ENV: ${process.env.NODE_ENV}`);
+    console.log(`[${requestId}]    process.env.VERCEL: ${process.env.VERCEL}`);
+    console.log(`[${requestId}]    process.env.VERCEL_ENV: ${process.env.VERCEL_ENV}`);
+    
     // Use tunnel URL if provided, otherwise use environment-based URL
     const serverBaseUrl = tunnelUrl || getAppUrl();
     const functionUrl = getVapiFunctionsUrl();
     
+    console.log(`[${requestId}] 🔍 URL Resolution:`);
+    console.log(`[${requestId}]    getAppUrl() result: ${getAppUrl()}`);
+    console.log(`[${requestId}]    getVapiFunctionsUrl() result: ${getVapiFunctionsUrl()}`);
     console.log(`[${requestId}]    Final App URL: ${serverBaseUrl}`);
     console.log(`[${requestId}]    Final Function URL: ${functionUrl}`);
     
