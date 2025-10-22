@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getEnvironmentInfo, isProductionEnvironment } from '@/lib/utils/url';
 
 /**
  * Test API route to debug environment variables
@@ -27,6 +28,11 @@ export async function GET(request: NextRequest) {
     console.log('Total env vars:', allEnvVars.length);
     console.log('All env vars:', allEnvVars);
     
+    console.log('\n=== URL UTILITIES TEST ===');
+    const urlInfo = getEnvironmentInfo();
+    console.log('URL Environment Info:', urlInfo);
+    console.log('Is Production Environment:', isProductionEnvironment());
+    
     return NextResponse.json({
       success: true,
       debug: {
@@ -43,6 +49,8 @@ export async function GET(request: NextRequest) {
         },
         totalEnvVars: allEnvVars.length,
         allEnvVars: allEnvVars,
+        urlInfo: urlInfo,
+        isProductionEnvironment: isProductionEnvironment(),
       }
     });
     

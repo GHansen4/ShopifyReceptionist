@@ -1,7 +1,8 @@
 'use client';
 
-import React, { type FC, type ReactNode, Suspense, useEffect, useState } from 'react';
+import React, { type FC, type ReactNode, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { isProductionEnvironment } from '@/lib/utils/url';
 
 interface AppBridgeProviderWrapperProps {
   children: ReactNode;
@@ -13,7 +14,6 @@ interface AppBridgeProviderWrapperProps {
  */
 function AppBridgeContent({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
-  const [appBridgeInitialized, setAppBridgeInitialized] = useState(false);
   
   // Extract Shopify parameters from URL
   const host = searchParams.get('host');
@@ -32,18 +32,35 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
   // Get API key from environment
   const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
   
-  // Debug logging (temporarily - remove after fixing)
-  console.log('[DEBUG] === Environment Variables Debug ===');
-  console.log('[DEBUG] NODE_ENV:', process.env.NODE_ENV);
-  console.log('[DEBUG] NEXT_PUBLIC_SHOPIFY_API_KEY:', process.env.NEXT_PUBLIC_SHOPIFY_API_KEY);
-  console.log('[DEBUG] NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL);
-  console.log('[DEBUG] All NEXT_PUBLIC vars:', Object.keys(process.env).filter(key => key.startsWith('NEXT_PUBLIC_')));
-  console.log('[DEBUG] === Host Parameter Debug ===');
-  console.log('[DEBUG] Host from searchParams:', host);
-  console.log('[DEBUG] Host from window.location:', windowHost);
-  console.log('[DEBUG] Final host:', finalHost);
-  console.log('[DEBUG] Is embedded:', isEmbedded);
-  console.log('[DEBUG] === End Debug ===');
+  // Check for production environment and localhost usage
+  const isProduction = isProductionEnvironment();
+  const isUsingLocalhost = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  
+  if (isProduction && isUsingLocalhost) {
+    console.error('[AppBridge] ❌ CRITICAL: Production environment detected but using localhost URL');
+    console.error('[AppBridge] This will cause issues with Shopify App Bridge and external services');
+    console.error('[AppBridge] Please ensure NEXT_PUBLIC_APP_URL is set to your production domain');
+  }
+
+  // Debug logging with improved environment detection
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[DEBUG] === AppBridge Environment Debug ===');
+    console.log('[DEBUG] NODE_ENV:', process.env.NODE_ENV);
+    console.log('[DEBUG] VERCEL:', process.env.VERCEL);
+    console.log('[DEBUG] Is Production Environment:', isProduction);
+    console.log('[DEBUG] Is Using Localhost:', isUsingLocalhost);
+    console.log('[DEBUG] NEXT_PUBLIC_SHOPIFY_API_KEY:', process.env.NEXT_PUBLIC_SHOPIFY_API_KEY ? 'configured' : 'MISSING');
+    console.log('[DEBUG] NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL || 'NOT SET');
+    console.log('[DEBUG] VERCEL_URL:', process.env.VERCEL_URL || 'NOT SET');
+    console.log('[DEBUG] SHOPIFY_APP_URL:', process.env.SHOPIFY_APP_URL || 'NOT SET');
+    console.log('[DEBUG] === Host Parameter Debug ===');
+    console.log('[DEBUG] Host from searchParams:', host);
+    console.log('[DEBUG] Host from window.location:', windowHost);
+    console.log('[DEBUG] Final host:', finalHost);
+    console.log('[DEBUG] Is embedded:', isEmbedded);
+    console.log('[DEBUG] === End Debug ===');
+  }
   
   // Initialize App Bridge v4+ using createApp pattern
   useEffect(() => {
@@ -64,7 +81,6 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
             (window as any).shopifyApp = app;
           }
           
-          setAppBridgeInitialized(true);
           console.log('[AppBridge] ✅ App Bridge v4+ initialized successfully');
         } catch (error) {
           console.error('[AppBridge] ❌ Failed to initialize App Bridge:', error);
