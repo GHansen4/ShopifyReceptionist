@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Page, Layout, Card, Box, Text, Heading, EmptyState } from '@shopify/polaris';
+import { Page, Layout, Card, Box, Text, EmptyState } from '@shopify/polaris';
 
 export default function CallsPage() {
   return (

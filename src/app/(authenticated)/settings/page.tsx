@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Page, Layout, Card, Box, Text, Heading, FormLayout, TextField, Button } from '@shopify/polaris';
+import { Page, Layout, Card, Box, Text, FormLayout, TextField, Button } from '@shopify/polaris';
 
 export default function SettingsPage() {
   return (
@@ -15,7 +15,7 @@ export default function SettingsPage() {
             <Box padding="400">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--p-space-400)' }}>
                 <div>
-                  <Heading level={2}>Application Settings</Heading>
+                  <Text variant="headingLg" as="h2">Application Settings</Text>
                   <Text variant="bodyMd" as="p" tone="subdued">
                     Configure how your voice receptionist behaves
                   </Text>
@@ -51,7 +51,7 @@ export default function SettingsPage() {
           <Card>
             <Box padding="400">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--p-space-200)' }}>
-                <Heading level={3}>About</Heading>
+                <Text variant="headingMd" as="h3">About</Text>
                 <Text variant="bodyMd" as="p">
                   Version: 1.0.0
                 </Text>

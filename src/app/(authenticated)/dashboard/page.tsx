@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Page, Layout, Card, Box, Text, Heading } from '@shopify/polaris';
+import { Page, Layout, Card, Box, Text } from '@shopify/polaris';
 
 /**
  * Dashboard Page
@@ -19,7 +19,7 @@ export default function DashboardPage() {
           <Card>
             <Box padding="400">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--p-space-300)' }}>
-                <Heading level={2}>Welcome to Your Voice Receptionist</Heading>
+                <Text variant="headingLg" as="h2">Welcome to Your Voice Receptionist</Text>
                 <Text variant="bodyMd" as="p">
                   Manage your AI-powered voice receptionist for your Shopify store. Configure settings,
                   view call logs, and monitor your receptionists.
@@ -33,7 +33,7 @@ export default function DashboardPage() {
           <Card>
             <Box padding="400">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--p-space-200)' }}>
-                <Heading level={3}>Active Receptionists</Heading>
+                <Text variant="headingMd" as="h3">Active Receptionists</Text>
                 <Text variant="bodyMd" as="p">
                   0
                 </Text>
@@ -49,7 +49,7 @@ export default function DashboardPage() {
           <Card>
             <Box padding="400">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--p-space-200)' }}>
-                <Heading level={3}>Recent Calls</Heading>
+                <Text variant="headingMd" as="h3">Recent Calls</Text>
                 <Text variant="bodyMd" as="p">
                   0
                 </Text>
@@ -65,7 +65,7 @@ export default function DashboardPage() {
           <Card>
             <Box padding="400">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--p-space-200)' }}>
-                <Heading level={3}>Quick Links</Heading>
+                <Text variant="headingMd" as="h3">Quick Links</Text>
                 <ul style={{ margin: 0, paddingLeft: '20px' }}>
                   <li><Text variant="bodyMd">Go to Receptionists page to create or manage</Text></li>
                   <li><Text variant="bodyMd">Check Calls page for recent call history</Text></li>
