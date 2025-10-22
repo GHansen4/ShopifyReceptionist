@@ -1,0 +1,244 @@
+import { NextRequest } from 'next/server';
+import { getShopContext } from '@/lib/shopify/context';
+import { supabase } from '@/lib/supabase/client';
+import {
+  provisionReceptionist,
+  validateAssistantConfig,
+  type VapiAssistantConfig,
+} from '@/lib/vapi';
+import { createSuccessResponse, createErrorResponse } from '@/lib/utils/api';
+import { AuthenticationError, ExternalServiceError, ValidationError } from '@/lib/utils/errors';
+import { logError } from '@/lib/utils/errors';
+
+/**
+ * POST /api/vapi/provision
+ * Provisions a new Vapi assistant and phone number for the shop
+ * Called during app installation or when user clicks "Setup AI Receptionist"
+ *
+ * Flow:
+ * 1. Validate session token & shop context
+ * 2. Fetch shop data and top products
+ * 3. Create Vapi assistant with retry logic
+ * 4. Provision phone number with fallback area codes
+ * 5. Save to database
+ * 6. Return phone number to frontend
+ */
+export async function POST(request: NextRequest) {
+  const requestId = Math.random().toString(36).substring(7);
+
+  try {
+    console.log(`[${requestId}] Starting Vapi provision request...`);
+
+    // ======================================================================
+    // Step 1: Validate Authentication
+    // ======================================================================
+    const shopContext = getShopContext(request);
+    if (!shopContext) {
+      return createErrorResponse(new AuthenticationError('Session token required'));
+    }
+
+    console.log(`[${requestId}] Authenticated shop: ${shopContext.shop}`);
+
+    // ======================================================================
+    // Step 2: Fetch Shop Data
+    // ======================================================================
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: shop, error: shopError } = await (supabase as any)
+      .from('shops')
+      .select('*')
+      .eq('shop_domain', shopContext.shop)
+      .single();
+
+    if (shopError || !shop) {
+      return createErrorResponse(new ExternalServiceError('Shop not found', 'supabase'));
+    }
+
+    console.log(`[${requestId}] Found shop: ${shop.shop_name || shop.shop_domain}`);
+
+    // Check if already provisioned
+    if (shop.vapi_assistant_id && shop.phone_number) {
+      console.log(`[${requestId}] ⚠️ Shop already provisioned with phone: ${shop.phone_number}`);
+      return createSuccessResponse({
+        status: 'already_provisioned',
+        phoneNumber: shop.phone_number as string,
+        assistantId: shop.vapi_assistant_id as string,
+        message: 'AI Receptionist already configured',
+      });
+    }
+
+    // ======================================================================
+    // Step 3: Fetch Top Products
+    // ======================================================================
+    console.log(`[${requestId}] Fetching products for assistant context...`);
+
+    // Get top 20 products (by creation date, most recent first)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: products, error: productsError } = await (supabase as any)
+      .from('products')
+      .select('*')
+      .eq('shop_id', shop.id as string)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (productsError) {
+      logError(productsError, {
+        context: 'fetch_products_for_vapi',
+        shopId: shop.id,
+      });
+      // Continue even if no products - can still create assistant
+    }
+
+    const productList =
+      products && products.length > 0
+        ? products
+        : [
+            {
+              id: 'placeholder',
+              shop_id: shop.id,
+              shopify_product_id: 'placeholder',
+              title: 'Sample Product',
+              description: 'Welcome to our store! We have many products available.',
+              price: 9900, // $99.00
+              currency: 'USD',
+              inventory_quantity: 0,
+              image_url: null,
+              product_url: null,
+              variants: null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ];
+
+    console.log(`[${requestId}] Found ${productList.length} products for context`);
+
+    // ======================================================================
+    // Step 4: Validate Configuration
+    // ======================================================================
+    const assistantConfig: VapiAssistantConfig = {
+      shopId: shop.id as string,
+      shopName: (shop.shop_name as string) || shopContext.shop,
+      products: productList,
+      voiceId: (shop.settings?.voice_id as string) || 'rachel',
+      hoursOfOperation: (shop.settings?.hours_of_operation as string) || undefined,
+    };
+
+    console.log(`[${requestId}] Validating assistant configuration...`);
+    validateAssistantConfig(assistantConfig);
+    console.log(`[${requestId}] ✅ Configuration validated`);
+
+    // ======================================================================
+    // Step 5: Provision Vapi Assistant & Phone Number (with retries)
+    // ======================================================================
+    console.log(`[${requestId}] Starting Vapi provisioning with retry logic...`);
+
+    const provisioningResult = await provisionReceptionist(assistantConfig);
+
+    console.log(`[${requestId}] ✅ Provisioning complete: ${provisioningResult.phoneNumber}`);
+
+    // ======================================================================
+    // Step 6: Save to Database
+    // ======================================================================
+    console.log(`[${requestId}] Saving provisioning results to database...`);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateError } = await (supabase as any)
+      .from('shops')
+      .update({
+        vapi_assistant_id: provisioningResult.assistantId,
+        phone_number: provisioningResult.phoneNumber,
+        vapi_phone_number_id: provisioningResult.phoneNumber, // Store for reference
+        settings: {
+          ...shop.settings,
+          voice_receptionist_active: true,
+          provisioned_at: new Date().toISOString(),
+        },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', shop.id);
+
+    if (updateError) {
+      logError(updateError, {
+        context: 'save_vapi_provision',
+        shopId: shop.id,
+        assistantId: provisioningResult.assistantId,
+        phoneNumber: provisioningResult.phoneNumber,
+      });
+
+      // Log this as a critical error - provisioning succeeded but DB save failed
+      return createErrorResponse(
+        new ExternalServiceError(
+          'Provisioning succeeded but failed to save to database. Please contact support.',
+          'supabase',
+          {
+            assistantId: provisioningResult.assistantId,
+            phoneNumber: provisioningResult.phoneNumber,
+          }
+        )
+      );
+    }
+
+    console.log(`[${requestId}] ✅ Successfully saved to database. Provision complete!`);
+
+    // ======================================================================
+    // Step 7: Return Success
+    // ======================================================================
+    return createSuccessResponse({
+      status: 'provisioned',
+      assistantId: provisioningResult.assistantId,
+      assistantName: provisioningResult.assistantName,
+      phoneNumber: provisioningResult.phoneNumber,
+      message: 'AI Receptionist setup complete!',
+      setupTime: 'approx. 30 seconds',
+    });
+  } catch (error) {
+    // Comprehensive error logging
+    logError(error, {
+      context: 'vapi_provision_endpoint',
+      requestId,
+    });
+
+    // Determine if this is a validation error or external service error
+    if (error instanceof ValidationError) {
+      return createErrorResponse(error);
+    }
+
+    if (error instanceof ExternalServiceError) {
+      return createErrorResponse(error);
+    }
+
+    // Generic error
+    return createErrorResponse(error as Error);
+  }
+}
+
+/**
+ * GET /api/vapi/provision
+ * Check if shop already has a provisioned AI receptionist
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const shopContext = getShopContext(request);
+    if (!shopContext) {
+      return createErrorResponse(new AuthenticationError('Session token required'));
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: shop, error } = await (supabase as any)
+      .from('shops')
+      .select('id, vapi_assistant_id, phone_number')
+      .eq('shop_domain', shopContext.shop)
+      .single();
+
+    if (error || !shop) {
+      return createErrorResponse(new ExternalServiceError('Shop not found', 'supabase'));
+    }
+
+    return createSuccessResponse({
+      isProvisioned: !!(shop.vapi_assistant_id && shop.phone_number),
+      assistantId: (shop.vapi_assistant_id as string) || null,
+      phoneNumber: (shop.phone_number as string) || null,
+    });
+  } catch (error) {
+    return createErrorResponse(error as Error);
+  }
+}

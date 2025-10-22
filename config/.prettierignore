@@ -1,0 +1,11 @@
+.next
+dist
+build
+node_modules
+.git
+*.lock
+*.log
+coverage
+.env
+.env.local
+.env.*.local
