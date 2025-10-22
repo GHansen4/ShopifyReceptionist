@@ -54,6 +54,18 @@ let nextConfig = {
     SHOPIFY_APP_URL: process.env.SHOPIFY_APP_URL || process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   },
+
+  // Webpack configuration to ensure path aliases work
+  webpack: (config, { isServer }) => {
+    // Ensure @ alias resolves correctly
+    config.resolve = config.resolve || {};
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': require('path').resolve(__dirname, 'src'),
+    };
+
+    return config;
+  },
 };
 
 // Only enable Sentry if credentials are provided
