@@ -79,4 +79,15 @@ export function getEnv(): EnvConfig & { SHOPIFY_APP_URL: string } {
   }
 }
 
-export const env = getEnv();
+// Use a getter to allow env validation to be lazy (deferred until runtime)
+// This prevents build failures when env vars aren't available during build
+let _env: (EnvConfig & { SHOPIFY_APP_URL: string }) | null = null;
+
+export const env = new Proxy({} as EnvConfig & { SHOPIFY_APP_URL: string }, {
+  get(_target, prop) {
+    if (!_env) {
+      _env = getEnv();
+    }
+    return _env[prop as keyof typeof _env];
+  }
+});

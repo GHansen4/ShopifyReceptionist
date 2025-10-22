@@ -41,5 +41,21 @@ export function getSupabaseAdmin() {
   return supabaseAdminClient;
 }
 
-export const supabase = getSupabaseClient();
-export const supabaseAdmin = getSupabaseAdmin();
+// Use Proxy for lazy initialization to avoid build-time errors
+export const supabase = new Proxy({} as ReturnType<typeof createClient>, {
+  get(_target, prop) {
+    const client = getSupabaseClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const value = (client as any)[prop];
+    return typeof value === 'function' ? value.bind(client) : value;
+  }
+});
+
+export const supabaseAdmin = new Proxy({} as ReturnType<typeof createClient>, {
+  get(_target, prop) {
+    const client = getSupabaseAdmin();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const value = (client as any)[prop];
+    return typeof value === 'function' ? value.bind(client) : value;
+  }
+});

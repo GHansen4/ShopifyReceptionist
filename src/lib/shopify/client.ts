@@ -19,35 +19,51 @@ import { SupabaseSessionStorage } from './session-storage';
 // Create session storage instance
 const sessionStorage = new SupabaseSessionStorage();
 
-// Initialize Shopify API
-export const shopify = shopifyApi({
-  apiKey: env.SHOPIFY_API_KEY,
-  apiSecretKey: env.SHOPIFY_API_SECRET,
-  scopes: env.SHOPIFY_SCOPES.split(','),
-  hostName: env.SHOPIFY_APP_URL.replace('https://', '').replace('http://', ''),
-  hostScheme: env.SHOPIFY_APP_URL.startsWith('https') ? 'https' : 'http',
-  apiVersion: ApiVersion.October24, // Use specific API version
-  isEmbeddedApp: true,
-  sessionStorage: sessionStorage,
-  
-  // For development logging
-  ...(process.env.NODE_ENV === 'development' && {
-    logger: {
-      level: 'info',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      log: (severity: string, message: string, ...args: any[]) => {
-        console.log(`[Shopify API - ${severity}]`, message, ...args);
-      },
-    },
-  }),
-});
+// Lazy initialization to avoid build-time env validation errors
+let _shopify: ReturnType<typeof shopifyApi> | null = null;
 
-if (process.env.NODE_ENV === 'development') {
-  console.log('[Shopify Client] ✅ Initialized with session storage');
-  console.log('[Shopify Client] API Version:', ApiVersion.October24);
-  console.log('[Shopify Client] Host:', env.SHOPIFY_APP_URL);
-  console.log('[Shopify Client] Scopes:', env.SHOPIFY_SCOPES);
+function initShopify() {
+  if (_shopify) return _shopify;
+  
+  _shopify = shopifyApi({
+    apiKey: env.SHOPIFY_API_KEY,
+    apiSecretKey: env.SHOPIFY_API_SECRET,
+    scopes: env.SHOPIFY_SCOPES.split(','),
+    hostName: env.SHOPIFY_APP_URL.replace('https://', '').replace('http://', ''),
+    hostScheme: env.SHOPIFY_APP_URL.startsWith('https') ? 'https' : 'http',
+    apiVersion: ApiVersion.October24, // Use specific API version
+    isEmbeddedApp: true,
+    sessionStorage: sessionStorage,
+    
+    // For development logging
+    ...(process.env.NODE_ENV === 'development' && {
+      logger: {
+        level: 'info',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        log: (severity: string, message: string, ...args: any[]) => {
+          console.log(`[Shopify API - ${severity}]`, message, ...args);
+        },
+      },
+    }),
+  });
+
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Shopify Client] ✅ Initialized with session storage');
+    console.log('[Shopify Client] API Version:', ApiVersion.October24);
+    console.log('[Shopify Client] Host:', env.SHOPIFY_APP_URL);
+    console.log('[Shopify Client] Scopes:', env.SHOPIFY_SCOPES);
+  }
+  
+  return _shopify;
 }
+
+// Export shopify instance with lazy initialization
+export const shopify = new Proxy({} as ReturnType<typeof shopifyApi>, {
+  get(_target, prop) {
+    const instance = initShopify();
+    return instance[prop as keyof typeof instance];
+  }
+});
 
 // Legacy export for backward compatibility (will be removed)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
