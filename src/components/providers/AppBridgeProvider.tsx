@@ -1,6 +1,7 @@
 'use client';
 
-import React, { type FC, type ReactNode, useEffect, useState } from 'react';
+import React, { type FC, type ReactNode, Suspense } from 'react';
+import { Provider as AppBridgeProvider } from '@shopify/app-bridge-react';
 import { useSearchParams } from 'next/navigation';
 
 interface AppBridgeProviderWrapperProps {
@@ -8,86 +9,79 @@ interface AppBridgeProviderWrapperProps {
 }
 
 /**
+ * Inner component that uses useSearchParams (must be wrapped in Suspense)
+ */
+function AppBridgeContent({ children }: { children: ReactNode }) {
+  const searchParams = useSearchParams();
+  
+  // Extract Shopify parameters from URL
+  const host = searchParams.get('host');
+  const shop = searchParams.get('shop');
+  
+  // Check if we're in embedded context
+  const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
+  
+  // Get API key from environment
+  const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
+  
+  // Log initialization (only in development)
+  if (process.env.NODE_ENV === 'development' && isEmbedded) {
+    console.log('[AppBridge] Initializing in embedded mode');
+    console.log('[AppBridge] Shop:', shop || 'not provided');
+    console.log('[AppBridge] Host:', host ? 'present' : 'missing');
+    console.log('[AppBridge] API Key:', apiKey ? 'configured' : 'MISSING - Set NEXT_PUBLIC_SHOPIFY_API_KEY');
+  }
+  
+  // If we're embedded and have the required parameters, initialize App Bridge
+  if (isEmbedded && host && apiKey) {
+    return (
+      <AppBridgeProvider
+        config={{
+          apiKey: apiKey,
+          host: host,
+          forceRedirect: false,
+        }}
+      >
+        {children}
+      </AppBridgeProvider>
+    );
+  }
+  
+  // Not embedded or missing parameters - render without App Bridge
+  if (process.env.NODE_ENV === 'development' && !isEmbedded) {
+    console.log('[AppBridge] Running in standalone mode (not embedded)');
+  }
+  
+  if (process.env.NODE_ENV === 'development' && isEmbedded && !host) {
+    console.warn('[AppBridge] ⚠️ Embedded but missing host parameter');
+  }
+  
+  if (process.env.NODE_ENV === 'development' && isEmbedded && !apiKey) {
+    console.error('[AppBridge] ❌ Missing NEXT_PUBLIC_SHOPIFY_API_KEY environment variable');
+  }
+  
+  return <>{children}</>;
+}
+
+/**
  * App Bridge Provider Wrapper
  * Initializes Shopify App Bridge for embedded app communication
- * This enables the app to work properly when embedded in Shopify Admin
  * 
- * For Next.js App Router embedded apps, we:
- * 1. Extract session parameters from URL (host, shop, id_token)
- * 2. Use these to communicate with Shopify Admin
- * 3. Enable App Bridge features (navigation, toasts, etc.)
+ * This enables:
+ * - Proper iframe embedding in Shopify Admin
+ * - Session token authentication
+ * - App Bridge features (navigation, toasts, etc.)
+ * 
+ * Requirements:
+ * - NEXT_PUBLIC_SHOPIFY_API_KEY must be set in environment variables
+ * - host parameter must be in URL when embedded
  */
 export const AppBridgeProviderWrapper: FC<AppBridgeProviderWrapperProps> = ({ children }) => {
-  const searchParams = useSearchParams();
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [config, setConfig] = useState<{
-    host?: string;
-    shop?: string;
-    apiKey?: string;
-  } | null>(null);
-
-  useEffect(() => {
-    // Initialize App Bridge on client side
-    const initializeAppBridge = async () => {
-      try {
-        // Extract Shopify parameters from URL
-        const host = searchParams.get('host');
-        const shop = searchParams.get('shop');
-        const embedded = searchParams.get('embedded');
-        const idToken = searchParams.get('id_token');
-        const session = searchParams.get('session');
-        
-        // Check if we're in embedded context
-        const isEmbedded = embedded === '1' || window.self !== window.top;
-        
-        if (isEmbedded && (host || shop)) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[AppBridge] Initializing in embedded mode');
-            console.log('[AppBridge] Shop:', shop);
-            console.log('[AppBridge] Host:', host ? 'present' : 'missing');
-            console.log('[AppBridge] ID Token:', idToken ? 'present' : 'missing');
-            console.log('[AppBridge] Session:', session ? 'present' : 'missing');
-          }
-          
-          setConfig({
-            host: host || undefined,
-            shop: shop || undefined,
-            apiKey: process.env.NEXT_PUBLIC_SHOPIFY_API_KEY,
-          });
-        } else {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('[AppBridge] Running in standalone mode (not embedded)');
-          }
-        }
-        
-        setIsInitialized(true);
-      } catch (error) {
-        console.error('[AppBridge] Error initializing App Bridge:', error);
-        setIsInitialized(true); // Don't block rendering on error
-      }
-    };
-
-    initializeAppBridge();
-  }, [searchParams]);
-
-  // Show basic loading state while initializing (very quick)
-  if (!isInitialized) {
-    return <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>;
-  }
-
-  // If we have App Bridge config, we could initialize the full App Bridge here
-  // For now, we just pass through the children with the config available
-  // Full App Bridge integration would require @shopify/app-bridge-react package
-  
-  if (config?.host && process.env.NODE_ENV === 'development') {
-    console.log('[AppBridge] App Bridge config ready:', {
-      hasHost: !!config.host,
-      hasShop: !!config.shop,
-      hasApiKey: !!config.apiKey,
-    });
-  }
-
-  return <>{children}</>;
+  return (
+    <Suspense fallback={<div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>}>
+      <AppBridgeContent>{children}</AppBridgeContent>
+    </Suspense>
+  );
 };
 
 export default AppBridgeProviderWrapper;
