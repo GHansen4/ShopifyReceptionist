@@ -24,6 +24,14 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
   // Get API key from environment
   const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
   
+  // Debug logging (temporarily - remove after fixing)
+  console.log('[DEBUG] === Environment Variables Debug ===');
+  console.log('[DEBUG] NODE_ENV:', process.env.NODE_ENV);
+  console.log('[DEBUG] NEXT_PUBLIC_SHOPIFY_API_KEY:', process.env.NEXT_PUBLIC_SHOPIFY_API_KEY);
+  console.log('[DEBUG] NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL);
+  console.log('[DEBUG] All NEXT_PUBLIC vars:', Object.keys(process.env).filter(key => key.startsWith('NEXT_PUBLIC_')));
+  console.log('[DEBUG] === End Debug ===');
+  
   // Log initialization (only in development)
   if (process.env.NODE_ENV === 'development' && isEmbedded) {
     console.log('[AppBridge] Initializing in embedded mode');
