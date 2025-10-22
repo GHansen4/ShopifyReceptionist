@@ -63,6 +63,11 @@ let nextConfig = {
     ignoreBuildErrors: true,
   },
 
+  // Disable ESLint during build (linting is done in development and CI)
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+
   // Webpack configuration to ensure path aliases work
   webpack: (config, { isServer }) => {
     // Ensure @ alias resolves correctly

@@ -34,6 +34,7 @@
     "next": "^14.2.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "typescript": "^5.7.3",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -44,8 +45,7 @@
     "eslint": "^8.57.0",
     "eslint-config-next": "^14.2.3",
     "eslint-config-prettier": "^10.1.8",
-    "prettier": "^3.6.2",
-    "typescript": "^5.7.3"
+    "prettier": "^3.6.2"
   },
   "engines": {
     "node": ">=18.0.0",
