@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     
     // Use tunnel URL if provided, otherwise use environment-based URL
     const serverBaseUrl = tunnelUrl || getAppUrl();
-    const functionUrl = getVapiFunctionsUrl();
+    const functionUrl = tunnelUrl ? `${tunnelUrl}/api/vapi/functions` : getVapiFunctionsUrl();
     
     console.log(`[${requestId}] 🔍 URL Resolution:`);
     console.log(`[${requestId}]    getAppUrl() result: ${getAppUrl()}`);
