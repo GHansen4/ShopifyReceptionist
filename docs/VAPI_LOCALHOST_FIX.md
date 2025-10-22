@@ -1,260 +1,165 @@
-# ✅ Vapi Localhost URL Issue - FIXED
+# Fix: Vapi Still Using localhost URL
 
-## Problem
+## 🚨 Problem
 
-When provisioning a Vapi phone number, you received this error:
-
+You're getting this error again:
 ```
-serverUrl must be a valid URL. Hot tip, the protocol should be https://, 
-but found https://localhost:3000/api/vapi/functions
+Provisioning failed: Test provisioning failed: serverUrl must be a valid URL. 
+Hot tip, the protocol should be https://, but found https://localhost:3000/api/vapi/functions
 ```
 
-**Root Cause:** Vapi needs a **publicly accessible URL** to call your app's functions during phone calls. `localhost:3000` is only accessible from your computer, not from Vapi's servers.
+## 🔍 Root Cause
+
+The Vapi provisioning code is still using `localhost:3000` instead of the Vercel URL. This happens because:
+
+1. **Environment variables not set in Vercel** - The code falls back to localhost
+2. **Wrong environment variable priority** - Code is checking wrong variables first
+
+## ⚡ Quick Fix
+
+### Step 1: Check Environment Variables in Vercel
+
+Go to: https://vercel.com → Your Project → **Settings** → **Environment Variables**
+
+**Required variables:**
+```bash
+NEXT_PUBLIC_APP_URL=https://shopify-receptionist.vercel.app
+SHOPIFY_APP_URL=https://shopify-receptionist.vercel.app
+```
+
+**Critical:** Both variables must be set to the Vercel URL!
+
+### Step 2: Check Current Values
+
+The provisioning code checks these in order:
+1. `tunnelUrl` (from request body) - usually not provided
+2. `process.env.SHOPIFY_APP_URL` - should be Vercel URL
+3. `process.env.NEXT_PUBLIC_APP_URL` - should be Vercel URL
+
+### Step 3: Force Redeploy
+
+1. **Deployments** → Latest → **⋯** → **Redeploy**
+2. **Uncheck** "Use existing Build Cache"
+3. Wait for fresh deployment
 
 ---
 
-## Solution Implemented
+## 🔧 Code Analysis
 
-### 1. **Pre-Flight Validation Added**
-
-The code now **checks the URL BEFORE** creating the assistant:
+The provisioning code does this:
 
 ```typescript
-// src/app/api/vapi/test/provision/route.ts (lines 23-62)
-
-// PRE-FLIGHT CHECK: Validate Public URL
-const shopifyAppUrl = process.env.SHOPIFY_APP_URL;
+// Line 27-28 in /api/vapi/test/provision/route.ts
+const shopifyAppUrl = tunnelUrl || process.env.SHOPIFY_APP_URL;
 const nextPublicUrl = process.env.NEXT_PUBLIC_APP_URL;
 
-// Log what URLs are available
-console.log('SHOPIFY_APP_URL:', shopifyAppUrl || 'NOT SET');
-console.log('NEXT_PUBLIC_APP_URL:', nextPublicUrl || 'NOT SET');
+// Line 38
+const serverBaseUrl = shopifyAppUrl || nextPublicUrl;
+```
 
-// Use Shopify tunnel URL if available, fallback to NEXT_PUBLIC_APP_URL
+**If both are undefined or localhost, it uses localhost!**
+
+---
+
+## 🧪 Debug Steps
+
+### Step 1: Check What URL is Being Used
+
+Look at the Vercel logs when you click "Provision Test Phone Number":
+
+```
+[requestId] 🔍 Environment Check:
+[requestId]    Tunnel URL (from request): NOT PROVIDED
+[requestId]    SHOPIFY_APP_URL (env): [should be Vercel URL]
+[requestId]    NEXT_PUBLIC_APP_URL (env): [should be Vercel URL]
+[requestId]    Using: [should be Vercel URL]
+```
+
+### Step 2: Expected Output
+
+**If working correctly:**
+```
+[requestId]    SHOPIFY_APP_URL (env): https://shopify-receptionist.vercel.app
+[requestId]    NEXT_PUBLIC_APP_URL (env): https://shopify-receptionist.vercel.app
+[requestId]    Using: https://shopify-receptionist.vercel.app
+```
+
+**If broken:**
+```
+[requestId]    SHOPIFY_APP_URL (env): NOT SET
+[requestId]    NEXT_PUBLIC_APP_URL (env): NOT SET
+[requestId]    Using: undefined
+```
+
+---
+
+## 🔧 Manual Fix Options
+
+### Option 1: Set Both Environment Variables
+
+In Vercel, add both:
+```bash
+SHOPIFY_APP_URL=https://shopify-receptionist.vercel.app
+NEXT_PUBLIC_APP_URL=https://shopify-receptionist.vercel.app
+```
+
+### Option 2: Update Code to Force Vercel URL
+
+If environment variables aren't working, we can hardcode the Vercel URL temporarily:
+
+**File:** `src/app/api/vapi/test/provision/route.ts`
+
+Change line 38:
+```typescript
+// OLD
 const serverBaseUrl = shopifyAppUrl || nextPublicUrl;
 
-// CRITICAL: Reject localhost URLs
-if (serverBaseUrl.includes('localhost') || serverBaseUrl.includes('127.0.0.1')) {
-  console.error('❌ ERROR: Cannot use localhost URL for Vapi');
-  console.error('Current URL:', serverBaseUrl);
-  console.error('');
-  console.error('🔧 FIX: Start Shopify CLI to get a public tunnel URL');
-  console.error('   1. Terminal 1: shopify app dev');
-  console.error('   2. Terminal 2: npm run dev');
-  
-  return error; // Stops provisioning immediately
-}
-
-const functionUrl = `${serverBaseUrl}/api/vapi/functions`;
-console.log('✅ Public URL validated:', functionUrl);
+// NEW (temporary fix)
+const serverBaseUrl = shopifyAppUrl || nextPublicUrl || 'https://shopify-receptionist.vercel.app';
 ```
 
-### 2. **Clear Error Messages**
+### Option 3: Check Vercel Environment
 
-If localhost is detected, you'll now see:
-
-```
-❌ ERROR: Cannot provision Vapi with localhost URL (https://localhost:3000)
-   Start Shopify CLI first: shopify app dev
-
-Shopify CLI creates a public tunnel (*.trycloudflare.com) that Vapi can reach.
-```
+1. Go to **Functions** tab in Vercel
+2. Look for environment variable loading errors
+3. Check if variables are being loaded at runtime
 
 ---
 
-## How to Use
+## 🎯 Most Likely Solution
 
-### ✅ **Correct Setup (2 Terminals)**
-
-**Terminal 1 - Shopify CLI (MUST run first):**
-```powershell
-shopify app dev
-```
-
-Wait for:
-```
-✅ Ready, watching for changes in your app
-```
-
-This creates a public tunnel URL like:
-```
-https://santa-jenny-frequencies-replacement.trycloudflare.com
-```
-
-**Terminal 2 - Next.js:**
-```powershell
-npm run dev
-```
-
-### ❌ **What Won't Work**
-
-Running only `npm run dev` without `shopify app dev` will result in:
-- `SHOPIFY_APP_URL`: NOT SET
-- Fallback to `NEXT_PUBLIC_APP_URL`: `https://localhost:3000`
-- **Provisioning BLOCKED** with error message
-
----
-
-## Environment Variable Priority
-
-The code checks environment variables in this order:
-
-1. **`SHOPIFY_APP_URL`** (preferred) - Set automatically by Shopify CLI
-   - Example: `https://[random].trycloudflare.com`
-   - ✅ Public - Vapi can reach it
-
-2. **`NEXT_PUBLIC_APP_URL`** (fallback) - Set in your `.env`
-   - Example: `https://localhost:3000`
-   - ❌ Private - Vapi cannot reach it
-
----
-
-## What Changed
-
-### Before:
-```typescript
-// Would try to use localhost and fail at Vapi API level
-serverUrl: `${process.env.SHOPIFY_APP_URL || process.env.NEXT_PUBLIC_APP_URL}/api/vapi/functions`
-```
-
-### After:
-```typescript
-// Validates URL BEFORE calling Vapi API
-const serverBaseUrl = process.env.SHOPIFY_APP_URL || process.env.NEXT_PUBLIC_APP_URL;
-
-if (serverBaseUrl.includes('localhost')) {
-  return error; // Stop immediately with clear message
-}
-
-serverUrl: `${serverBaseUrl}/api/vapi/functions` // Only proceeds if public URL
-```
-
----
-
-## Testing the Fix
-
-1. **Start servers in correct order:**
-   ```powershell
-   # Terminal 1
-   shopify app dev
-   
-   # Terminal 2 (wait for tunnel URL to appear)
-   npm run dev
-   ```
-
-2. **Go to Vapi test page:**
-   ```
-   https://localhost:3000/test/vapi?shop=always-ai-dev-store.myshopify.com
-   ```
-
-3. **Click "Provision Test Phone Number"**
-
-4. **Check terminal logs** - you should see:
-   ```
-   🔍 Environment Check:
-      SHOPIFY_APP_URL: https://[something].trycloudflare.com
-      NEXT_PUBLIC_APP_URL: https://localhost:3000
-   ✅ Public URL validated: https://[something].trycloudflare.com/api/vapi/functions
-   ✅ Assistant created: ast_...
-   ```
-
-5. **If you see an error**, the logs will tell you exactly what's wrong:
-   - Which URL it's trying to use
-   - Why it's rejecting it
-   - How to fix it (start Shopify CLI)
-
----
-
-## Files Changed
-
-- `src/app/api/vapi/test/provision/route.ts` (lines 23-62)
-  - Added pre-flight URL validation
-  - Added detailed logging
-  - Blocks provisioning if localhost detected
-  - Provides clear error messages
-
----
-
-## Why This Matters
-
-**During a phone call:**
-```
-1. Customer calls → Vapi servers answer
-2. Customer asks "What do you sell?"
-3. Vapi needs to call YOUR app's function endpoint
-4. YOUR app fetches products from Shopify
-5. YOUR app returns data to Vapi
-6. Vapi speaks the response to the customer
-```
-
-If your URL is `localhost:3000`, **step 3 fails** because:
-- Vapi's servers are on the internet
-- `localhost` only means "this computer"
-- Vapi can't reach "your computer"
-
-With Shopify CLI's tunnel:
-```
-https://[random].trycloudflare.com/api/vapi/functions
-         ↓
-    (public internet - Vapi can reach it)
-         ↓
-    Cloudflare tunnel
-         ↓
-    Your local server (localhost:3000)
-```
-
----
-
-## Quick Reference
-
-| Scenario | SHOPIFY_APP_URL | Provisioning Result |
-|----------|----------------|---------------------|
-| Only `npm run dev` | NOT SET | ❌ Blocked (localhost) |
-| `shopify app dev` + `npm run dev` | `https://[tunnel].trycloudflare.com` | ✅ Success |
-| Stopped `shopify app dev` | May be stale | ⚠️ May fail (old tunnel) |
-
----
-
-## Troubleshooting
-
-### "SHOPIFY_APP_URL: NOT SET"
-
-**Cause:** Shopify CLI is not running.
+**The issue is probably that `SHOPIFY_APP_URL` is not set in Vercel.**
 
 **Fix:**
-```powershell
-shopify app dev
-```
+1. Go to Vercel → Settings → Environment Variables
+2. Add: `SHOPIFY_APP_URL=https://shopify-receptionist.vercel.app`
+3. Redeploy
 
-### "Using localhost URL"
-
-**Cause:** `SHOPIFY_APP_URL` is undefined, falling back to `.env` file.
-
-**Fix:** Start Shopify CLI before Next.js:
-```powershell
-# Stop current servers (Ctrl+C in both terminals)
-# Then restart in correct order:
-shopify app dev    # Wait for tunnel
-npm run dev        # Then start Next.js
-```
-
-### "Tunnel URL changes every time"
-
-**Cause:** Shopify CLI generates a new random tunnel URL each time you restart.
-
-**Impact:** 
-- ✅ No problem for development
-- ✅ Next provision will use the new URL automatically
-- ⚠️ Old assistants still have the old URL (won't work until re-provisioned)
-
-**Solution:** Re-provision after restarting Shopify CLI if needed.
+**Why this happens:**
+- `SHOPIFY_APP_URL` is automatically set by Shopify CLI during local development
+- In production (Vercel), you must set it manually
+- The code prioritizes `SHOPIFY_APP_URL` over `NEXT_PUBLIC_APP_URL`
 
 ---
 
-## Summary
+## ✅ Verification
 
-✅ **Problem solved:** Code now validates URLs before calling Vapi API
-✅ **Clear errors:** You'll know immediately if localhost is being used
-✅ **Auto-detection:** Uses tunnel URL when available
-✅ **Safe fallback:** Blocks provisioning if only localhost is available
+After setting the environment variables and redeploying:
 
+1. **Click "Provision Test Phone Number"**
+2. **Check Vercel logs** for:
+   ```
+   [requestId] ✅ Public URL validated: https://shopify-receptionist.vercel.app/api/vapi/functions
+   ```
+3. **Should work without localhost error**
+
+---
+
+## 🚀 Quick Action
+
+**Right now:**
+1. Add `SHOPIFY_APP_URL=https://shopify-receptionist.vercel.app` to Vercel
+2. Redeploy without cache
+3. Test provisioning - should use Vercel URL ✅
+
+This is the same issue we solved before - environment variables not properly set in Vercel!
