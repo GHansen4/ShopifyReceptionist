@@ -1,7 +1,7 @@
 'use client';
 
 import React, { type FC, type ReactNode, Suspense } from 'react';
-import { Provider as AppBridgeProvider } from '@shopify/app-bridge-react';
+import { Provider } from '@shopify/app-bridge-react';
 import { useSearchParams } from 'next/navigation';
 
 interface AppBridgeProviderWrapperProps {
@@ -35,7 +35,7 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
   // If we're embedded and have the required parameters, initialize App Bridge
   if (isEmbedded && host && apiKey) {
     return (
-      <AppBridgeProvider
+      <Provider
         config={{
           apiKey: apiKey,
           host: host,
@@ -43,7 +43,7 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
         }}
       >
         {children}
-      </AppBridgeProvider>
+      </Provider>
     );
   }
   
