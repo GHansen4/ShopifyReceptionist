@@ -1,7 +1,6 @@
 'use client';
 
-import React, { type FC, type ReactNode, Suspense } from 'react';
-import { Provider } from '@shopify/app-bridge-react';
+import React, { type FC, type ReactNode, Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 interface AppBridgeProviderWrapperProps {
@@ -9,10 +8,12 @@ interface AppBridgeProviderWrapperProps {
 }
 
 /**
- * Inner component that uses useSearchParams (must be wrapped in Suspense)
+ * App Bridge v4+ Implementation
+ * Uses the new createApp pattern instead of Provider/AppProvider
  */
 function AppBridgeContent({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
+  const [appBridgeInitialized, setAppBridgeInitialized] = useState(false);
   
   // Extract Shopify parameters from URL
   const host = searchParams.get('host');
@@ -44,40 +45,53 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
   console.log('[DEBUG] Is embedded:', isEmbedded);
   console.log('[DEBUG] === End Debug ===');
   
-  // Log initialization (only in development)
+  // Initialize App Bridge v4+ using createApp pattern
+  useEffect(() => {
+    if (isEmbedded && finalHost && apiKey) {
+      console.log('[AppBridge] Initializing App Bridge v4+ with createApp pattern');
+      
+      // Dynamically import App Bridge to avoid SSR issues
+      import('@shopify/app-bridge').then(({ createApp }) => {
+        try {
+          const app = createApp({
+            apiKey: apiKey,
+            host: finalHost,
+            forceRedirect: false,
+          });
+          
+          // Store app instance globally for use by other components
+          if (typeof window !== 'undefined') {
+            (window as any).shopifyApp = app;
+          }
+          
+          setAppBridgeInitialized(true);
+          console.log('[AppBridge] ✅ App Bridge v4+ initialized successfully');
+        } catch (error) {
+          console.error('[AppBridge] ❌ Failed to initialize App Bridge:', error);
+        }
+      }).catch((error) => {
+        console.error('[AppBridge] ❌ Failed to import App Bridge:', error);
+      });
+    } else {
+      // Log why App Bridge wasn't initialized
+      if (process.env.NODE_ENV === 'development') {
+        if (!isEmbedded) {
+          console.log('[AppBridge] Running in standalone mode (not embedded)');
+        } else if (!finalHost) {
+          console.warn('[AppBridge] ⚠️ Embedded but missing host parameter');
+        } else if (!apiKey) {
+          console.error('[AppBridge] ❌ Missing NEXT_PUBLIC_SHOPIFY_API_KEY environment variable');
+        }
+      }
+    }
+  }, [isEmbedded, finalHost, apiKey]);
+  
+  // Log initialization status
   if (process.env.NODE_ENV === 'development' && isEmbedded) {
     console.log('[AppBridge] Initializing in embedded mode');
     console.log('[AppBridge] Shop:', shop || 'not provided');
     console.log('[AppBridge] Host:', finalHost ? 'present' : 'missing');
     console.log('[AppBridge] API Key:', apiKey ? 'configured' : 'MISSING - Set NEXT_PUBLIC_SHOPIFY_API_KEY');
-  }
-  
-  // If we're embedded and have the required parameters, initialize App Bridge
-  if (isEmbedded && finalHost && apiKey) {
-    return (
-      <Provider
-        config={{
-          apiKey: apiKey,
-          host: finalHost,
-          forceRedirect: false,
-        }}
-      >
-        {children}
-      </Provider>
-    );
-  }
-  
-  // Not embedded or missing parameters - render without App Bridge
-  if (process.env.NODE_ENV === 'development' && !isEmbedded) {
-    console.log('[AppBridge] Running in standalone mode (not embedded)');
-  }
-  
-  if (process.env.NODE_ENV === 'development' && isEmbedded && !finalHost) {
-    console.warn('[AppBridge] ⚠️ Embedded but missing host parameter');
-  }
-  
-  if (process.env.NODE_ENV === 'development' && isEmbedded && !apiKey) {
-    console.error('[AppBridge] ❌ Missing NEXT_PUBLIC_SHOPIFY_API_KEY environment variable');
   }
   
   return <>{children}</>;
