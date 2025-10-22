@@ -26,6 +26,19 @@ A professional, production-ready Shopify embedded app that provides voice-first 
 - **Validation**: Zod
 - **Code Quality**: ESLint + Prettier
 
+## 📚 Documentation
+
+**All documentation has been moved to the [`docs/`](docs/) folder.**
+
+**Quick Links:**
+- 📖 [Documentation Index](docs/INDEX.md) - Complete documentation index
+- 🚀 [Complete Deployment Guide](docs/COMPLETE_DEPLOYMENT_GUIDE.md) - Deploy to Vercel
+- 🤖 [Vapi Quick Start](docs/VAPI_QUICK_START.md) - Set up voice AI
+- 🔐 [OAuth Solution](docs/ROBUST_OAUTH_SOLUTION.md) - Authentication guide
+- 🐛 [Root Cause Analysis](docs/ROOT_CAUSE_ANALYSIS_AND_FIX.md) - Troubleshooting
+
+---
+
 ## Prerequisites
 
 - Node.js 18+ (npm 9+)

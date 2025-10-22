@@ -1,0 +1,29 @@
+# Copy these to Vercel Environment Variables
+# Go to: Vercel Project → Settings → Environment Variables
+
+SHOPIFY_API_KEY=a0563782e38f84b7ce2ef0d2f5b87ed5
+SHOPIFY_API_SECRET=YOUR_SHOPIFY_SECRET_HERE
+SHOPIFY_SCOPES=read_products,read_orders,read_customers
+
+VAPI_API_KEY=92c92ccc-8c0b-416b-b059-47711e746ab8
+VAPI_PUBLIC_KEY=296470fc-f13b-4fa5-8f13-d486182c1880
+
+SUPABASE_URL=https://ezoyrjzzynmxdoorpokr.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6b3lyanp6eW5teGRvb3Jwb2tyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA5NjgwMzYsImV4cCI6MjA3NjU0NDAzNn0.rwoAXtVRasmb_WvPs7o89E8j_o8zuyeMnra5mOVLbw8
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SERVICE_ROLE_KEY_HERE
+
+NEXT_PUBLIC_APP_URL=https://YOUR_VERCEL_URL.vercel.app
+NODE_ENV=production
+
+# Optional (Sentry error tracking)
+SENTRY_DSN=
+SENTRY_AUTH_TOKEN=
+SENTRY_ORG=
+SENTRY_PROJECT=
+
+# IMPORTANT:
+# 1. Replace YOUR_SHOPIFY_SECRET_HERE with actual secret from Shopify Partners
+# 2. Replace YOUR_SUPABASE_SERVICE_ROLE_KEY_HERE with service role key from Supabase
+# 3. After first deploy, update NEXT_PUBLIC_APP_URL with your actual Vercel URL
+# 4. Make sure to enable all three environments (Production, Preview, Development)
+
