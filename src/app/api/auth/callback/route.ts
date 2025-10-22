@@ -5,6 +5,9 @@ import { supabaseAdmin } from '@/lib/supabase/client';
 import { env } from '@/lib/env';
 import crypto from 'crypto';
 
+// Force dynamic rendering (uses query params)
+export const dynamic = 'force-dynamic';
+
 /**
  * OAuth Callback Route - Manual OAuth for Next.js App Router Compatibility
  * 

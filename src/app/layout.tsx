@@ -3,6 +3,9 @@ import './globals.css';
 import { PolarisProvider } from '@/components/providers/PolarisProvider';
 import { AppBridgeProviderWrapper } from '@/components/providers/AppBridgeProvider';
 
+// Force dynamic rendering for all pages (Shopify embedded app receives query params)
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Voice Receptionist | Shopify App',
   description: 'Professional voice-first AI receptionist for Shopify stores',

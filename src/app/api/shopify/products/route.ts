@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SupabaseSessionStorage } from '@/lib/shopify/session-storage';
 import { env } from '@/lib/env';
 
+// Force dynamic rendering (uses query params)
+export const dynamic = 'force-dynamic';
+
 /**
  * Fetch products from Shopify Admin API
  * 

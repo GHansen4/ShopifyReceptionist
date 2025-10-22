@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { vapi } from '@/lib/vapi/client';
 import { createErrorResponse, createSuccessResponse } from '@/lib/utils/api';
 
+// Force dynamic rendering (uses query params)
+export const dynamic = 'force-dynamic';
+
 /**
  * Fetch a phone number by ID from Vapi
  * GET /api/vapi/test/phone?id=<phone-number-id>
