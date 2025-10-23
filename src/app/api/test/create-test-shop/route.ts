@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
+import { supabaseAdmin } from '@/lib/supabase/client';
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,8 +18,8 @@ export async function POST(request: NextRequest) {
       installed_at: new Date().toISOString(),
     };
     
-    // Insert test shop
-    const { data: shop, error } = await supabase
+    // Insert test shop using admin client (bypasses RLS)
+    const { data: shop, error } = await supabaseAdmin
       .from('shops')
       .insert(testShop)
       .select('id, shop_domain, shop_name')
