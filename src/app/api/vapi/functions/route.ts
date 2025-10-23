@@ -286,23 +286,29 @@ async function handleGetProducts(parameters: any, shopDomain: string) {
 
     console.log(`[get_products] Fetching ${limit} products for ${shop}`);
 
-    // Load Shopify session
-    const sessionStorage = new SupabaseSessionStorage();
-    const sessions = await sessionStorage.findSessionsByShop(shop);
+    // Load Shopify session directly from shopify_sessions table
+    const { supabaseAdmin } = await import('@/lib/supabase/client');
+    const { data: session, error: sessionError } = await supabaseAdmin
+      .from('shopify_sessions')
+      .select('*')
+      .eq('shop', shop)
+      .single();
 
-    if (!sessions || sessions.length === 0) {
+    if (sessionError || !session) {
+      console.error(`[get_products] ❌ Shop session not found:`, sessionError);
       return {
-        error: 'Store not authenticated',
+        error: 'Store not authenticated - session not found',
       };
     }
 
-    const session = sessions[0];
-
-    if (!session.accessToken) {
+    if (!session.access_token) {
+      console.error(`[get_products] ❌ No access token found in session`);
       return {
         error: 'No access token found',
       };
     }
+
+    console.log(`[get_products] ✅ Found session for ${session.shop}`);
 
     // Fetch products from Shopify
     const apiUrl = `https://${shop}/admin/api/2024-10/products.json?limit=${limit}`;
@@ -310,7 +316,7 @@ async function handleGetProducts(parameters: any, shopDomain: string) {
     const response = await fetch(apiUrl, {
       method: 'GET',
       headers: {
-        'X-Shopify-Access-Token': session.accessToken,
+        'X-Shopify-Access-Token': session.access_token,
         'Content-Type': 'application/json',
       },
     });
@@ -367,23 +373,29 @@ async function handleSearchProducts(parameters: any, shopDomain: string) {
 
     console.log(`[search_products] Searching for "${query}" in ${shop}`);
 
-    // Load Shopify session
-    const sessionStorage = new SupabaseSessionStorage();
-    const sessions = await sessionStorage.findSessionsByShop(shop);
+    // Load Shopify session directly from shopify_sessions table
+    const { supabaseAdmin } = await import('@/lib/supabase/client');
+    const { data: session, error: sessionError } = await supabaseAdmin
+      .from('shopify_sessions')
+      .select('*')
+      .eq('shop', shop)
+      .single();
 
-    if (!sessions || sessions.length === 0) {
+    if (sessionError || !session) {
+      console.error(`[search_products] ❌ Shop session not found:`, sessionError);
       return {
-        error: 'Store not authenticated',
+        error: 'Store not authenticated - session not found',
       };
     }
 
-    const session = sessions[0];
-
-    if (!session.accessToken) {
+    if (!session.access_token) {
+      console.error(`[search_products] ❌ No access token found in session`);
       return {
         error: 'No access token found',
       };
     }
+
+    console.log(`[search_products] ✅ Found session for ${session.shop}`);
 
     // Search products in Shopify (using title filter)
     const apiUrl = `https://${shop}/admin/api/2024-10/products.json?title=${encodeURIComponent(query)}&limit=5`;
@@ -391,7 +403,7 @@ async function handleSearchProducts(parameters: any, shopDomain: string) {
     const response = await fetch(apiUrl, {
       method: 'GET',
       headers: {
-        'X-Shopify-Access-Token': session.accessToken,
+        'X-Shopify-Access-Token': session.access_token,
         'Content-Type': 'application/json',
       },
     });
