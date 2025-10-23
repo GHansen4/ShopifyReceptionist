@@ -62,6 +62,31 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // ======================================================================
+    // DEBUG: Log the complete request structure
+    // ======================================================================
+    console.log('[Vapi Functions] 🔍 COMPLETE REQUEST DEBUG:');
+    console.log('[Vapi Functions] Headers:', {
+      'content-type': request.headers.get('content-type'),
+      'x-vapi-secret': request.headers.get('x-vapi-secret') ? 'present' : 'missing',
+      'x-api-key': request.headers.get('x-api-key') ? 'present' : 'missing',
+      'authorization': request.headers.get('authorization') ? 'present' : 'missing'
+    });
+    console.log('[Vapi Functions] Body structure:', {
+      hasBody: !!body,
+      bodyKeys: body ? Object.keys(body) : 'no body',
+      bodyType: typeof body,
+      bodyString: JSON.stringify(body, null, 2)
+    });
+    
+    // Check for function call in different possible locations
+    console.log('[Vapi Functions] 🔍 FUNCTION CALL SEARCH:');
+    console.log('[Vapi Functions] body?.message?.functionCall:', body?.message?.functionCall);
+    console.log('[Vapi Functions] body?.functionCall:', body?.functionCall);
+    console.log('[Vapi Functions] body?.message:', body?.message);
+    console.log('[Vapi Functions] body?.function:', body?.function);
+    console.log('[Vapi Functions] body?.name:', body?.name);
+
+    // ======================================================================
     // Get Shop Context (for Vapi calls, we need to determine shop differently)
     // ======================================================================
     // Vapi calls don't have Shopify session headers, so we need to determine
@@ -76,7 +101,7 @@ export async function POST(request: NextRequest) {
     } else {
       // For Vapi calls, we need to determine the shop from the assistant
       // We can get it from the function call parameters or use a fallback
-      const functionCall = body?.message?.functionCall;
+      const functionCall = body?.message?.functionCall || body?.functionCall || body?.function;
       
       if (functionCall?.parameters?.shop) {
         shopDomain = functionCall.parameters.shop;
@@ -92,17 +117,20 @@ export async function POST(request: NextRequest) {
     // Process Function Call
     // ======================================================================
     
-    if (isDev) {
-      console.log('[Vapi Functions] ═══════════════════════════════════════');
-      console.log('[Vapi Functions] Received function call');
-      console.log('[Vapi Functions] Body:', JSON.stringify(body, null, 2));
-    }
+    console.log('[Vapi Functions] ═══════════════════════════════════════');
+    console.log('[Vapi Functions] Processing function call...');
 
-    // Extract function call details
-    const functionCall = body?.message?.functionCall;
+    // Extract function call details - try multiple possible locations
+    const functionCall = body?.message?.functionCall || body?.functionCall || body?.function;
+    
+    console.log('[Vapi Functions] 🔍 FINAL FUNCTION CALL CHECK:');
+    console.log('[Vapi Functions] functionCall found:', !!functionCall);
+    console.log('[Vapi Functions] functionCall value:', functionCall);
     
     if (!functionCall) {
-      console.error('[Vapi Functions] No function call found in request');
+      console.error('[Vapi Functions] ❌ No function call found in request');
+      console.error('[Vapi Functions] Available body keys:', body ? Object.keys(body) : 'no body');
+      console.error('[Vapi Functions] Body content:', JSON.stringify(body, null, 2));
       return NextResponse.json({
         results: [{
           error: 'No function call provided',
