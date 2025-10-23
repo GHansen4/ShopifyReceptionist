@@ -46,25 +46,40 @@ export async function POST(request: NextRequest) {
     }
     
     // ======================================================================
-    // Get Shop Context
+    // Parse Request Body First
     // ======================================================================
-    const shopContext = getShopContext(request);
-    if (!shopContext) {
-      console.error('[Vapi Functions] ❌ No shop context found in request');
-      return NextResponse.json({
-        results: [{
-          error: 'Shop context required',
-        }],
-      }, { status: 400 });
-    }
+    const body = await request.json();
 
-    console.log(`[Vapi Functions] Shop context: ${shopContext.shop}`);
+    // ======================================================================
+    // Get Shop Context (for Vapi calls, we need to determine shop differently)
+    // ======================================================================
+    // Vapi calls don't have Shopify session headers, so we need to determine
+    // the shop from the assistant configuration or request context
+    let shopDomain: string;
+    
+    // Try to get shop from request headers first (if called from Shopify app)
+    const shopContext = getShopContext(request);
+    if (shopContext) {
+      shopDomain = shopContext.shop;
+      console.log(`[Vapi Functions] Shop from context: ${shopDomain}`);
+    } else {
+      // For Vapi calls, we need to determine the shop from the assistant
+      // We can get it from the function call parameters or use a fallback
+      const functionCall = body?.message?.functionCall;
+      
+      if (functionCall?.parameters?.shop) {
+        shopDomain = functionCall.parameters.shop;
+        console.log(`[Vapi Functions] Shop from parameters: ${shopDomain}`);
+      } else {
+        // Fallback to default shop (this should be configured per assistant)
+        shopDomain = 'always-ai-dev-store.myshopify.com';
+        console.log(`[Vapi Functions] Using fallback shop: ${shopDomain}`);
+      }
+    }
 
     // ======================================================================
     // Process Function Call
     // ======================================================================
-    
-    const body = await request.json();
     
     if (isDev) {
       console.log('[Vapi Functions] ═══════════════════════════════════════');
@@ -96,11 +111,11 @@ export async function POST(request: NextRequest) {
     
     switch (name) {
       case 'get_products':
-        result = await handleGetProducts(parameters, shopContext.shop);
+        result = await handleGetProducts(parameters, shopDomain);
         break;
       
       case 'search_products':
-        result = await handleSearchProducts(parameters, shopContext.shop);
+        result = await handleSearchProducts(parameters, shopDomain);
         break;
       
       default:
