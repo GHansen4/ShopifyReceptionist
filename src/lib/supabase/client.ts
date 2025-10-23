@@ -29,7 +29,7 @@ export function getSupabaseAdmin() {
       throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for admin operations');
     }
     
-    supabaseAdminClient = createClient(env.SUPABASE_URL, serviceRoleKey, {
+    supabaseAdminClient = createClient(process.env.SUPABASE_URL!, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
