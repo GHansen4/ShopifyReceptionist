@@ -6,37 +6,54 @@ import { getProducts, searchProducts } from '@/lib/shopify/admin-graphql';
 export const runtime = 'nodejs';
 
 /**
- * Extract assistant ID from Vapi request body
- * Supports all common Vapi payload shapes
+ * Check if the request is a tool call (not a conversation update)
  */
-function getAssistantId(body: any): string | undefined {
+function isToolCall(body: any): boolean {
+  // Accept typical tool-call shapes; reject conversation updates
+  if (!body) return false;
+  if (body.type === 'tool-call') return true;
+  if (body.message?.type === 'tool-call') return true;
+  if (body.message?.type === 'tool-calls') return true;
+  if (body.toolName || body.message?.toolName) return true;
+  if (body.tool?.name) return true;
+  if (body.function?.name) return true;
+  if (body.message?.function?.name) return true;
+  if (body.message?.toolCalls?.length > 0) return true;
+  return false;
+}
+
+/**
+ * Extract assistant ID from headers or body with robust fallback
+ */
+function extractAssistantId(body: any, headers: Headers): string | undefined {
+  // Prefer headers if provided by Vapi
+  const hdr =
+    headers.get('x-vapi-assistant-id') ||
+    headers.get('x-assistant-id') ||
+    undefined;
+  if (hdr) return hdr;
+
+  // Common body shapes
   return (
     body?.assistantId ||
     body?.assistant_id ||
     body?.assistant?.id ||
-    body?.call?.assistantId
+    body?.call?.assistantId ||
+    body?.message?.assistant?.id ||
+    undefined
   );
 }
 
 /**
  * Vapi Function Calling Endpoint
  * 
- * The AI calls this endpoint when it needs to fetch product information
- * during a phone conversation with a customer.
+ * ONLY handles tool/function calls from Vapi assistants.
+ * Conversation/call lifecycle events go to /api/vapi/webhook.
  * 
  * CRITICAL: Read request body EXACTLY ONCE to avoid consumption issues
  */
 export async function POST(req: Request) {
   try {
-    // ======================================================================
-    // Content-Type validation
-    // ======================================================================
-    const contentType = req.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      console.warn('[Vapi Functions] Invalid content-type:', contentType);
-      // Continue anyway for flexibility, but log the issue
-    }
-
     // ======================================================================
     // CRITICAL: Read raw body ONCE, parse JSON from same string
     // ======================================================================
@@ -52,27 +69,48 @@ export async function POST(req: Request) {
     }
 
     // Parse JSON from the same raw string
-    const body = JSON.parse(raw);
-    
+    let body: any = {};
+    try {
+      body = JSON.parse(raw);
+    } catch (parseError) {
+      console.error('[Vapi Functions] JSON parse error:', parseError);
+      return NextResponse.json({ ok: false, error: 'INVALID_JSON' }, { status: 400 });
+    }
+
+    // ======================================================================
+    // Ignore non-tool calls (conversation updates go to webhook)
+    // ======================================================================
+    if (!isToolCall(body)) {
+      console.log('[Vapi Functions] Ignoring non-tool call:', {
+        type: body?.type || body?.message?.type,
+        keys: Object.keys(body || {})
+      });
+      return NextResponse.json({ 
+        ok: true, 
+        ignored: true, 
+        reason: 'not-a-tool-call' 
+      }, { status: 200 });
+    }
+
+    console.log('[Vapi Functions] Processing tool call');
+
     // ======================================================================
     // Extract assistant ID with robust fallback
     // ======================================================================
-    const assistantId = getAssistantId(body);
+    const assistantId = extractAssistantId(body, req.headers);
     
     // Temporary diagnostics
     console.log('[Vapi Functions] Assistant ID found:', !!assistantId);
     console.log('[Vapi Functions] Available body keys:', Object.keys(body || {}));
     
     if (!assistantId) {
-      console.warn('[Vapi Functions] No assistant ID found in request', {
+      console.warn('[Vapi Functions] No assistant ID found', {
         keys: Object.keys(body || {}),
-        bodyStructure: {
-          hasAssistant: !!body?.assistant,
-          hasAssistantId: !!body?.assistantId,
-          hasAssistant_id: !!body?.assistant_id,
-          hasCall: !!body?.call,
-          assistantKeys: body?.assistant ? Object.keys(body.assistant) : 'no assistant object',
-          callKeys: body?.call ? Object.keys(body.call) : 'no call object'
+        hasMessage: !!body?.message,
+        rawLen: raw?.length || 0,
+        headers: {
+          'x-vapi-assistant-id': req.headers.get('x-vapi-assistant-id'),
+          'x-assistant-id': req.headers.get('x-assistant-id')
         }
       });
       return NextResponse.json({ ok: false, error: 'NO_ASSISTANT_ID' }, { status: 400 });
@@ -113,72 +151,82 @@ export async function POST(req: Request) {
     console.log('[Vapi Functions] Resolved shop:', shopData.shop_domain);
 
     // ======================================================================
-    // Process function calls
+    // Extract tool name and arguments
     // ======================================================================
-    
-    // Extract function call from various possible locations
-    let functionCall = null;
-    
-    // Try different message types and structures
-    if (body?.message?.type === 'tool-calls' && body?.message?.toolCalls?.[0]) {
+    let toolName: string | undefined;
+    let args: any = {};
+
+    // Try different possible locations for tool information
+    if (body.toolName) {
+      toolName = body.toolName;
+      args = body.arguments || {};
+    } else if (body.message?.toolName) {
+      toolName = body.message.toolName;
+      args = body.message.arguments || {};
+    } else if (body.tool?.name) {
+      toolName = body.tool.name;
+      args = body.tool.arguments || {};
+    } else if (body.function?.name) {
+      toolName = body.function.name;
+      args = body.function.arguments || {};
+    } else if (body.message?.function?.name) {
+      toolName = body.message.function.name;
+      args = body.message.function.arguments || {};
+    } else if (body.message?.toolCalls?.[0]) {
       const toolCall = body.message.toolCalls[0];
-      if (toolCall.type === 'function') {
-        functionCall = {
-          name: toolCall.function.name,
-          parameters: toolCall.function.arguments || {}
-        };
+      if (toolCall.function) {
+        toolName = toolCall.function.name;
+        args = toolCall.function.arguments || {};
       }
-    } else if (body?.message?.type === 'function-call' && body?.message?.functionCall) {
-      functionCall = {
-        name: body.message.functionCall.name,
-        parameters: body.message.functionCall.parameters || {}
-      };
-    } else if (body?.functionCall) {
-      functionCall = {
-        name: body.functionCall.name,
-        parameters: body.functionCall.parameters || {}
-      };
-    } else if (body?.function) {
-      functionCall = {
-        name: body.function.name,
-        parameters: body.function.parameters || {}
-      };
     }
 
-    if (!functionCall) {
-      console.warn('[Vapi Functions] No function call found in request');
+    if (!toolName) {
+      console.warn('[Vapi Functions] No tool name found in request');
       return NextResponse.json({ 
-        results: [{ 
-          error: 'No function call provided' 
-        }] 
+        ok: false, 
+        error: 'NO_TOOL_NAME' 
       }, { status: 400 });
     }
 
-    console.log('[Vapi Functions] Processing function:', functionCall.name);
+    console.log('[Vapi Functions] Processing tool:', toolName, 'with args:', args);
 
     // ======================================================================
-    // Execute function with explicit credentials
+    // Dispatch tool by name
     // ======================================================================
-    let result;
-    
-    if (functionCall.name === 'get_products') {
-      result = await handleGetProducts(functionCall.parameters, {
-        shopDomain: shopData.shop_domain,
-        accessToken: shopData.access_token
-      });
-    } else if (functionCall.name === 'search_products') {
-      result = await handleSearchProducts(functionCall.parameters, {
-        shopDomain: shopData.shop_domain,
-        accessToken: shopData.access_token
-      });
-    } else {
-      result = {
-        error: `Unknown function: ${functionCall.name}`,
-      };
+    let result: any;
+
+    switch (toolName) {
+      case 'search_products':
+        result = await handleSearchProducts(args, {
+          shopDomain: shopData.shop_domain,
+          accessToken: shopData.access_token
+        });
+        break;
+
+      case 'get_products':
+        result = await handleGetProducts(args, {
+          shopDomain: shopData.shop_domain,
+          accessToken: shopData.access_token
+        });
+        break;
+
+      case 'check_order_status':
+        result = await handleCheckOrderStatus(args, {
+          shopDomain: shopData.shop_domain,
+          accessToken: shopData.access_token
+        });
+        break;
+
+      default:
+        console.warn('[Vapi Functions] Unknown tool:', toolName);
+        result = {
+          error: `Unknown tool: ${toolName}`,
+        };
     }
 
     return NextResponse.json({
-      results: [result],
+      ok: true,
+      result: result
     });
 
   } catch (e: any) {
@@ -188,57 +236,7 @@ export async function POST(req: Request) {
 }
 
 /**
- * Get Products Handler
- * Fetches products from Shopify using explicit credentials
- */
-async function handleGetProducts(parameters: any, shopData: { shopDomain: string; accessToken: string }) {
-  try {
-    const limit = parameters?.limit || 5;
-    
-    console.log(`[get_products] Fetching ${limit} products for ${shopData.shopDomain}`);
-
-    // Use adminGraphQL with explicit credentials
-    const products = await getProducts({
-      shopDomain: shopData.shopDomain,
-      accessToken: shopData.accessToken,
-      limit
-    });
-
-    console.log(`[get_products] ✅ Fetched ${products.length} products via GraphQL`);
-
-    // Format products for the AI
-    const formattedProducts = products.map((product) => ({
-      title: product.title,
-      description: 'Product available in store',
-      price: product.priceRange.minVariantPrice.amount,
-      currency: product.priceRange.minVariantPrice.currencyCode,
-      available: product.availableForSale,
-      handle: product.handle,
-      variants: product.variants.edges.map(edge => ({
-        title: edge.node.title,
-        price: edge.node.price.amount,
-        currency: edge.node.price.currencyCode,
-        available: edge.node.availableForSale
-      }))
-    }));
-
-    return {
-      products: formattedProducts,
-      count: formattedProducts.length,
-    };
-
-  } catch (error: any) {
-    console.error('[get_products] Error:', error);
-    return {
-      error: 'Failed to fetch products',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    };
-  }
-}
-
-/**
  * Search Products Handler
- * Searches products by keyword using explicit credentials
  */
 async function handleSearchProducts(parameters: any, shopData: { shopDomain: string; accessToken: string }) {
   try {
@@ -252,17 +250,15 @@ async function handleSearchProducts(parameters: any, shopData: { shopDomain: str
 
     console.log(`[search_products] Searching for "${query}" in ${shopData.shopDomain}`);
 
-    // Use adminGraphQL with explicit credentials
     const products = await searchProducts({
       shopDomain: shopData.shopDomain,
       accessToken: shopData.accessToken,
       query,
-      limit: 5
+      limit: parameters?.limit || 5
     });
 
-    console.log(`[search_products] ✅ Found ${products.length} products matching "${query}" via GraphQL`);
+    console.log(`[search_products] ✅ Found ${products.length} products matching "${query}"`);
 
-    // Format products for the AI
     const formattedProducts = products.map((product) => ({
       title: product.title,
       description: 'Product available in store',
@@ -294,12 +290,91 @@ async function handleSearchProducts(parameters: any, shopData: { shopDomain: str
 }
 
 /**
+ * Get Products Handler
+ */
+async function handleGetProducts(parameters: any, shopData: { shopDomain: string; accessToken: string }) {
+  try {
+    const limit = parameters?.limit || 5;
+    
+    console.log(`[get_products] Fetching ${limit} products for ${shopData.shopDomain}`);
+
+    const products = await getProducts({
+      shopDomain: shopData.shopDomain,
+      accessToken: shopData.accessToken,
+      limit
+    });
+
+    console.log(`[get_products] ✅ Fetched ${products.length} products`);
+
+    const formattedProducts = products.map((product) => ({
+      title: product.title,
+      description: 'Product available in store',
+      price: product.priceRange.minVariantPrice.amount,
+      currency: product.priceRange.minVariantPrice.currencyCode,
+      available: product.availableForSale,
+      handle: product.handle,
+      variants: product.variants.edges.map(edge => ({
+        title: edge.node.title,
+        price: edge.node.price.amount,
+        currency: edge.node.price.currencyCode,
+        available: edge.node.availableForSale
+      }))
+    }));
+
+    return {
+      products: formattedProducts,
+      count: formattedProducts.length,
+    };
+
+  } catch (error: any) {
+    console.error('[get_products] Error:', error);
+    return {
+      error: 'Failed to fetch products',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+
+/**
+ * Check Order Status Handler
+ */
+async function handleCheckOrderStatus(parameters: any, shopData: { shopDomain: string; accessToken: string }) {
+  try {
+    const orderId = parameters?.orderId;
+    
+    if (!orderId) {
+      return {
+        error: 'Order ID is required',
+      };
+    }
+
+    console.log(`[check_order_status] Checking order ${orderId} for ${shopData.shopDomain}`);
+
+    // TODO: Implement order status lookup via Shopify Admin API
+    // For now, return a placeholder response
+    return {
+      orderId: orderId,
+      status: 'processing',
+      message: 'Order status lookup not yet implemented'
+    };
+
+  } catch (error: any) {
+    console.error('[check_order_status] Error:', error);
+    return {
+      error: 'Failed to check order status',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
+
+/**
  * Health check endpoint
  */
 export async function GET() {
   return NextResponse.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    endpoint: '/api/vapi/functions'
+    endpoint: '/api/vapi/functions',
+    purpose: 'Tool/function calls only - conversation events go to /api/vapi/webhook'
   });
 }

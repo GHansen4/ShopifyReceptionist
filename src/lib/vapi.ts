@@ -188,39 +188,61 @@ export async function createVapiAssistant(config: VapiAssistantConfig): Promise<
         recordingEnabled: true,
         functions: [
           {
-            name: 'order_lookup',
-            description: 'Look up customer orders by phone number or order ID',
-            parameters: {
-              type: 'object',
-              properties: {
-                phone: {
-                  type: 'string',
-                  description: 'Customer phone number',
-                },
-                orderId: {
-                  type: 'string',
-                  description: 'Order ID',
-                },
-              },
-            },
-          },
-          {
             name: 'search_products',
-            description: 'Search for products by name or category',
+            description: 'Search for products by name or keyword',
             parameters: {
               type: 'object',
               properties: {
                 query: {
                   type: 'string',
-                  description: 'Product name or category to search',
+                  description: 'Search term or product name',
+                },
+                limit: {
+                  type: 'number',
+                  description: 'Maximum number of products to return (default: 5)',
                 },
               },
               required: ['query'],
             },
           },
+          {
+            name: 'get_products',
+            description: 'Get a list of available products',
+            parameters: {
+              type: 'object',
+              properties: {
+                limit: {
+                  type: 'number',
+                  description: 'Maximum number of products to return (default: 5)',
+                },
+              },
+              required: [],
+            },
+          },
+          {
+            name: 'check_order_status',
+            description: 'Check the status of a customer order',
+            parameters: {
+              type: 'object',
+              properties: {
+                orderId: {
+                  type: 'string',
+                  description: 'Order ID or number',
+                },
+                phone: {
+                  type: 'string',
+                  description: 'Customer phone number',
+                },
+              },
+              required: ['orderId'],
+            },
+          },
         ],
-        serverUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.SHOPIFY_APP_URL}/api/vapi/functions/${config.shopId}`,
+        // Server tool URL for function calls (NOT webhook URL)
+        serverUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.SHOPIFY_APP_URL}/api/vapi/functions`,
         serverUrlSecret: process.env.VAPI_API_KEY,
+        // Global webhook URL for conversation/call events
+        webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.SHOPIFY_APP_URL}/api/vapi/webhook`,
       };
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
