@@ -160,9 +160,78 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    // Handle function calls (when AI wants to fetch data)
-    if (messageType === 'function-call') {
+    // Handle tool calls (AI wants to fetch data - THIS IS THE FUNCTION CALL!)
+    if (messageType === 'tool-calls') {
+      console.log('[Vapi Functions] ✅ Tool calls received - processing function call');
+      
+      // Extract function call from tool calls structure
+      const toolCalls = body?.message?.toolCalls || body?.message?.toolCallList;
+      console.log('[Vapi Functions] Tool calls found:', toolCalls);
+      
+      if (!toolCalls || toolCalls.length === 0) {
+        console.error('[Vapi Functions] ❌ No tool calls found in tool-calls message');
+        return NextResponse.json({
+          results: [{
+            error: 'No tool calls provided',
+          }],
+        }, { status: 400 });
+      }
+      
+      // Get the first tool call (function call)
+      const toolCall = toolCalls[0];
+      console.log('[Vapi Functions] Processing tool call:', toolCall);
+      
+      if (toolCall.type !== 'function') {
+        console.error('[Vapi Functions] ❌ Tool call is not a function:', toolCall.type);
+        return NextResponse.json({
+          results: [{
+            error: 'Tool call is not a function',
+          }],
+        }, { status: 400 });
+      }
+      
+      // Extract function details
+      const functionCall = {
+        name: toolCall.function.name,
+        parameters: toolCall.function.arguments || {}
+      };
+      
+      console.log('[Vapi Functions] ✅ Function call extracted:', functionCall);
+      
+      // Continue with function processing...
+      const { name, parameters } = functionCall;
+      
+      if (isDev) {
+        console.log('[Vapi Functions] Function:', name);
+        console.log('[Vapi Functions] Parameters:', parameters);
+      }
+      
+      // Process the function call (rest of the existing logic)
+      // Continue with existing function processing logic below...
+      
+    } else if (messageType === 'function-call') {
       console.log('[Vapi Functions] ✅ Function call received - processing');
+      
+      // Extract function call details - try multiple possible locations
+      const functionCall = body?.message?.functionCall || body?.functionCall || body?.function;
+      
+      console.log('[Vapi Functions] 🔍 FINAL FUNCTION CALL CHECK:');
+      console.log('[Vapi Functions] functionCall found:', !!functionCall);
+      console.log('[Vapi Functions] functionCall value:', functionCall);
+      
+      if (!functionCall) {
+        console.error('[Vapi Functions] ❌ No function call found in request');
+        console.error('[Vapi Functions] Available body keys:', body ? Object.keys(body) : 'no body');
+        console.error('[Vapi Functions] Body content:', JSON.stringify(body, null, 2));
+        return NextResponse.json({
+          results: [{
+            error: 'No function call provided',
+          }],
+        }, { status: 400 });
+      }
+
+      const { name, parameters } = functionCall;
+      
     } else {
       console.log('[Vapi Functions] ⚠️  Unknown message type:', messageType);
       console.log('[Vapi Functions] Available body keys:', body ? Object.keys(body) : 'no body');
@@ -172,26 +241,6 @@ export async function POST(request: NextRequest) {
         }],
       }, { status: 400 });
     }
-
-    // Extract function call details - try multiple possible locations
-    const functionCall = body?.message?.functionCall || body?.functionCall || body?.function;
-    
-    console.log('[Vapi Functions] 🔍 FINAL FUNCTION CALL CHECK:');
-    console.log('[Vapi Functions] functionCall found:', !!functionCall);
-    console.log('[Vapi Functions] functionCall value:', functionCall);
-    
-    if (!functionCall) {
-      console.error('[Vapi Functions] ❌ No function call found in request');
-      console.error('[Vapi Functions] Available body keys:', body ? Object.keys(body) : 'no body');
-      console.error('[Vapi Functions] Body content:', JSON.stringify(body, null, 2));
-      return NextResponse.json({
-        results: [{
-          error: 'No function call provided',
-        }],
-      }, { status: 400 });
-    }
-
-    const { name, parameters } = functionCall;
 
     if (isDev) {
       console.log('[Vapi Functions] Function:', name);
