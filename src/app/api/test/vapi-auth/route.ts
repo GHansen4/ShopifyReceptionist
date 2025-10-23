@@ -8,7 +8,6 @@ export async function GET(request: NextRequest) {
 
     const vapiApiKey = process.env.VAPI_API_KEY;
     const vapiPublicKey = process.env.VAPI_PUBLIC_KEY;
-    const vapiPrivateKey = process.env.VAPI_PRIVATE_KEY;
 
     const headers = {
       'x-vapi-secret': request.headers.get('x-vapi-secret') ? 'present' : 'missing',
@@ -19,19 +18,17 @@ export async function GET(request: NextRequest) {
     const config = {
       hasApiKey: !!vapiApiKey,
       hasPublicKey: !!vapiPublicKey,
-      hasPrivateKey: !!vapiPrivateKey,
-      allRequired: !!vapiApiKey && !!vapiPublicKey,
+      allRequired: !!vapiApiKey, // Only VAPI_API_KEY is required
     };
 
     const environment = {
       VAPI_API_KEY: vapiApiKey ? `${vapiApiKey.substring(0, 20)}...` : 'MISSING',
       VAPI_PUBLIC_KEY: vapiPublicKey ? `${vapiPublicKey.substring(0, 20)}...` : 'MISSING',
-      VAPI_PRIVATE_KEY: vapiPrivateKey ? `${vapiPrivateKey.substring(0, 20)}...` : 'MISSING',
     };
 
     const instructions: string[] = [];
-    if (!config.hasApiKey) instructions.push('Missing VAPI_API_KEY');
-    if (!config.hasPublicKey) instructions.push('Missing VAPI_PUBLIC_KEY');
+    if (!config.hasApiKey) instructions.push('Missing VAPI_API_KEY (REQUIRED)');
+    if (!config.hasPublicKey) instructions.push('Missing VAPI_PUBLIC_KEY (optional)');
 
     return NextResponse.json({
       success: true,
