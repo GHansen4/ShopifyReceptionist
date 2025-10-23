@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SupabaseSessionStorage } from '@/lib/shopify/session-storage';
+// Removed unused import: SupabaseSessionStorage
 import { getShopContext } from '@/lib/shopify/context';
 
 /**
@@ -253,6 +253,23 @@ export async function POST(request: NextRequest) {
       }
 
       const { name, parameters } = functionCall;
+      console.log(`[Vapi Functions] Processing function: ${name} with parameters:`, parameters);
+      
+      // Process the function call
+      let result;
+      if (name === 'get_products') {
+        result = await handleGetProducts(parameters, shopDomain);
+      } else if (name === 'search_products') {
+        result = await handleSearchProducts(parameters, shopDomain);
+      } else {
+        result = {
+          error: `Unknown function: ${name}`,
+        };
+      }
+      
+      return NextResponse.json({
+        results: [result],
+      });
       
     } else {
       console.log('[Vapi Functions] ⚠️  Unknown message type:', messageType);
@@ -309,8 +326,8 @@ async function handleGetProducts(parameters: any, shopDomain: string) {
     console.log(`[get_products] 🔍 DEBUG: Query result:`, {
       hasSession: !!session,
       sessionError: sessionError,
-      sessionShop: session?.shop,
-      sessionAccessToken: session?.access_token ? 'present' : 'missing'
+      sessionShop: (session as any)?.shop || 'unknown',
+      sessionAccessToken: (session as any)?.access_token ? 'present' : 'missing'
     });
 
     if (sessionError) {
@@ -340,74 +357,69 @@ async function handleGetProducts(parameters: any, shopDomain: string) {
         error: 'Store not authenticated - session not found',
         debug: {
           searchedFor: shop,
-          availableSessions: allSessions?.map(s => s.shop) || []
+          availableSessions: allSessions?.map((s: any) => s.shop) || []
         }
       };
     }
 
-    if (!session.access_token) {
+    if (!(session as any).access_token) {
       console.error(`[get_products] ❌ No access token found in session`);
       return {
         error: 'No access token found',
       };
     }
 
-    console.log(`[get_products] ✅ Found session for ${session.shop}`);
+    // Type assertion to fix TypeScript inference issue
+    const sessionData = session as { shop: string; access_token: string };
+    console.log(`[get_products] ✅ Found session for ${sessionData.shop}`);
 
-    // Fetch products from Shopify
-    const apiUrl = `https://${shop}/admin/api/2024-10/products.json?limit=${limit}`;
-    
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'X-Shopify-Access-Token': session.access_token,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      console.error('[get_products] Shopify API error:', response.status);
+    // Fetch products using GraphQL API
+    try {
+      const { getProducts } = await import('@/lib/shopify/graphql');
       
-      // DEBUG: Get detailed error information
-      const errorText = await response.text();
-      console.error('[get_products] 🔍 DEBUG: Shopify API error details:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-        body: errorText,
-        accessToken: session.access_token ? `${session.access_token.substring(0, 20)}...` : 'missing'
-      });
-      
-      return {
-        error: 'Failed to fetch products from store',
-        details: `Shopify API error ${response.status}: ${response.statusText}`,
-        debug: {
-          status: response.status,
-          statusText: response.statusText,
-          errorBody: errorText
-        }
+      // Create session object for GraphQL client
+      const graphqlSession = {
+        shop: sessionData.shop,
+        accessToken: sessionData.access_token,
       };
-    }
 
-    const data = await response.json();
-    const products = data.products || [];
+      console.log(`[get_products] 🔍 Fetching products via GraphQL (limit: ${limit})`);
+      const products = await getProducts(graphqlSession, limit);
 
-    console.log(`[get_products] ✅ Fetched ${products.length} products`);
+      console.log(`[get_products] ✅ Fetched ${products.length} products via GraphQL`);
 
-    // Format products for the AI
-    const formattedProducts = products.map((product: any) => ({
-      title: product.title,
-      description: product.body_html?.replace(/<[^>]*>/g, '').substring(0, 200) || 'No description',
-      price: product.variants?.[0]?.price || 'Price varies',
-      available: product.variants?.[0]?.inventory_quantity > 0,
-      product_type: product.product_type,
-      vendor: product.vendor,
+      // Format products for the AI
+      const formattedProducts = products.map((product) => ({
+        title: product.title,
+        description: 'Product available in store', // GraphQL doesn't include body_html by default
+        price: product.priceRange.minVariantPrice.amount,
+        currency: product.priceRange.minVariantPrice.currencyCode,
+        available: product.availableForSale,
+        handle: product.handle,
+        variants: product.variants.edges.map(edge => ({
+          title: edge.node.title,
+          price: edge.node.price.amount,
+          currency: edge.node.price.currencyCode,
+          available: edge.node.availableForSale
+        }))
     }));
 
     return {
       products: formattedProducts,
       count: formattedProducts.length,
     };
+
+    } catch (graphqlError) {
+      console.error('[get_products] ❌ GraphQL error:', graphqlError);
+      return {
+        error: 'Failed to fetch products via GraphQL',
+        details: graphqlError instanceof Error ? graphqlError.message : 'Unknown GraphQL error',
+        debug: {
+          error: graphqlError instanceof Error ? graphqlError.message : 'Unknown error',
+          stack: graphqlError instanceof Error ? graphqlError.stack : undefined
+        }
+      };
+    }
 
   } catch (error: any) {
     console.error('[get_products] Error:', error);
@@ -457,8 +469,8 @@ async function handleSearchProducts(parameters: any, shopDomain: string) {
     console.log(`[search_products] 🔍 DEBUG: Query result:`, {
       hasSession: !!session,
       sessionError: sessionError,
-      sessionShop: session?.shop,
-      sessionAccessToken: session?.access_token ? 'present' : 'missing'
+      sessionShop: (session as any)?.shop || 'unknown',
+      sessionAccessToken: (session as any)?.access_token ? 'present' : 'missing'
     });
 
     if (sessionError) {
@@ -488,68 +500,51 @@ async function handleSearchProducts(parameters: any, shopDomain: string) {
         error: 'Store not authenticated - session not found',
         debug: {
           searchedFor: shop,
-          availableSessions: allSessions?.map(s => s.shop) || []
+          availableSessions: allSessions?.map((s: any) => s.shop) || []
         }
       };
     }
 
-    if (!session.access_token) {
+    if (!(session as any).access_token) {
       console.error(`[search_products] ❌ No access token found in session`);
       return {
         error: 'No access token found',
       };
     }
 
-    console.log(`[search_products] ✅ Found session for ${session.shop}`);
+    // Type assertion to fix TypeScript inference issue
+    const sessionData = session as { shop: string; access_token: string };
+    console.log(`[search_products] ✅ Found session for ${sessionData.shop}`);
 
-    // Search products in Shopify (using title filter)
-    const apiUrl = `https://${shop}/admin/api/2024-10/products.json?title=${encodeURIComponent(query)}&limit=5`;
-    
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'X-Shopify-Access-Token': session.access_token,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      console.error('[search_products] Shopify API error:', response.status);
+    // Search products using GraphQL API
+    try {
+      const { searchProducts } = await import('@/lib/shopify/graphql');
       
-      // DEBUG: Get detailed error information
-      const errorText = await response.text();
-      console.error('[search_products] 🔍 DEBUG: Shopify API error details:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-        body: errorText,
-        accessToken: session.access_token ? `${session.access_token.substring(0, 20)}...` : 'missing'
-      });
-      
-      return {
-        error: 'Failed to search products',
-        details: `Shopify API error ${response.status}: ${response.statusText}`,
-        debug: {
-          status: response.status,
-          statusText: response.statusText,
-          errorBody: errorText
-        }
+      // Create session object for GraphQL client
+      const graphqlSession = {
+        shop: sessionData.shop,
+        accessToken: sessionData.access_token,
       };
-    }
 
-    const data = await response.json();
-    const products = data.products || [];
+      console.log(`[search_products] 🔍 Searching products via GraphQL: "${query}"`);
+      const products = await searchProducts(graphqlSession, query, 5);
 
-    console.log(`[search_products] ✅ Found ${products.length} products matching "${query}"`);
+      console.log(`[search_products] ✅ Found ${products.length} products matching "${query}" via GraphQL`);
 
-    // Format products for the AI
-    const formattedProducts = products.map((product: any) => ({
-      title: product.title,
-      description: product.body_html?.replace(/<[^>]*>/g, '').substring(0, 200) || 'No description',
-      price: product.variants?.[0]?.price || 'Price varies',
-      available: product.variants?.[0]?.inventory_quantity > 0,
-      product_type: product.product_type,
-      vendor: product.vendor,
+      // Format products for the AI
+      const formattedProducts = products.map((product) => ({
+        title: product.title,
+        description: 'Product available in store', // GraphQL doesn't include body_html by default
+        price: product.priceRange.minVariantPrice.amount,
+        currency: product.priceRange.minVariantPrice.currencyCode,
+        available: product.availableForSale,
+        handle: product.handle,
+        variants: product.variants.edges.map(edge => ({
+          title: edge.node.title,
+          price: edge.node.price.amount,
+          currency: edge.node.price.currencyCode,
+          available: edge.node.availableForSale
+        }))
     }));
 
     return {
@@ -557,6 +552,18 @@ async function handleSearchProducts(parameters: any, shopDomain: string) {
       count: formattedProducts.length,
       query: query,
     };
+
+    } catch (graphqlError) {
+      console.error('[search_products] ❌ GraphQL error:', graphqlError);
+      return {
+        error: 'Failed to search products via GraphQL',
+        details: graphqlError instanceof Error ? graphqlError.message : 'Unknown GraphQL error',
+        debug: {
+          error: graphqlError instanceof Error ? graphqlError.message : 'Unknown error',
+          stack: graphqlError instanceof Error ? graphqlError.stack : undefined
+        }
+      };
+    }
 
   } catch (error: any) {
     console.error('[search_products] Error:', error);
