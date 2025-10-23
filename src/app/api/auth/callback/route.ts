@@ -137,10 +137,14 @@ export async function GET(request: NextRequest) {
       console.log('[OAuth Callback] ✅ Session stored in Supabase');
     }
 
-    // Store shop metadata in shops table
+    // CRITICAL: Store shop metadata in shops table - OAuth MUST fail if this fails
+    console.log('[OAuth Callback] Storing shop metadata in shops table...');
+    
+    let shopSaveSuccess = false;
+    let lastError: any = null;
+    
+    // Try admin client first
     try {
-      console.log('[OAuth Callback] Storing shop metadata in shops table...');
-      
       const { error } = await supabaseAdmin
         .from('shops')
         .upsert({
@@ -158,19 +162,68 @@ export async function GET(request: NextRequest) {
         });
 
       if (error) {
-        console.error('[OAuth Callback] ❌ Failed to store shop metadata:', error);
-        console.error('[OAuth Callback] Error details:', {
-          message: error.message,
-          code: error.code,
-          hint: error.hint
-        });
+        console.error('[OAuth Callback] ❌ Admin client failed:', error);
+        lastError = error;
       } else {
-        console.log('[OAuth Callback] ✅ Shop metadata stored successfully');
+        console.log('[OAuth Callback] ✅ Shop metadata stored successfully via admin client');
+        shopSaveSuccess = true;
       }
-    } catch (metadataError) {
-      console.error('[OAuth Callback] ❌ Error storing shop metadata:', metadataError);
-      console.error('[OAuth Callback] Error type:', typeof metadataError);
-      console.error('[OAuth Callback] Error message:', metadataError instanceof Error ? metadataError.message : 'Unknown error');
+    } catch (adminError) {
+      console.error('[OAuth Callback] ❌ Admin client exception:', adminError);
+      lastError = adminError;
+    }
+    
+    // If admin client failed, try regular client as fallback
+    if (!shopSaveSuccess) {
+      console.log('[OAuth Callback] 🔄 Trying regular Supabase client as fallback...');
+      try {
+        const { supabase } = await import('@/lib/supabase/client');
+        const { error } = await supabase
+          .from('shops')
+          .upsert({
+            shop_domain: shop,
+            shop_name: shop.replace('.myshopify.com', ''),
+            access_token: accessToken,
+            installed_at: new Date().toISOString(),
+            subscription_status: 'trial',
+            plan_name: 'starter',
+            call_minutes_used: 0,
+            call_minutes_limit: 100,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'shop_domain'
+          });
+
+        if (error) {
+          console.error('[OAuth Callback] ❌ Regular client also failed:', error);
+          lastError = error;
+        } else {
+          console.log('[OAuth Callback] ✅ Shop metadata stored successfully via regular client');
+          shopSaveSuccess = true;
+        }
+      } catch (regularError) {
+        console.error('[OAuth Callback] ❌ Regular client exception:', regularError);
+        lastError = regularError;
+      }
+    }
+    
+    // CRITICAL: If both clients failed, OAuth installation is incomplete
+    if (!shopSaveSuccess) {
+      console.error('[OAuth Callback] ❌ CRITICAL: Both Supabase clients failed to save shop data');
+      console.error('[OAuth Callback] Last error:', lastError);
+      
+      return NextResponse.json(
+        { 
+          error: 'OAuth installation incomplete - failed to save shop data',
+          details: {
+            shop,
+            error: lastError?.message || 'Unknown error',
+            code: lastError?.code || 'DATABASE_ERROR',
+            hint: 'Both Supabase clients failed. Check database permissions and configuration.'
+          }
+        },
+        { status: 500 }
+      );
     }
 
     if (process.env.NODE_ENV === 'development') {
