@@ -209,6 +209,22 @@ export async function POST(request: NextRequest) {
       // Process the function call (rest of the existing logic)
       // Continue with existing function processing logic below...
       
+      // Handle the function call
+      if (name === 'get_products') {
+        console.log('[Vapi Functions] Processing get_products function...');
+        return await handleGetProducts(shopDomain, parameters);
+      } else if (name === 'search_products') {
+        console.log('[Vapi Functions] Processing search_products function...');
+        return await handleSearchProducts(shopDomain, parameters);
+      } else {
+        console.error('[Vapi Functions] ❌ Unknown function:', name);
+        return NextResponse.json({
+          results: [{
+            error: `Unknown function: ${name}`,
+          }],
+        }, { status: 400 });
+      }
+      
     } else if (messageType === 'function-call') {
       console.log('[Vapi Functions] ✅ Function call received - processing');
       
@@ -241,40 +257,6 @@ export async function POST(request: NextRequest) {
         }],
       }, { status: 400 });
     }
-
-    if (isDev) {
-      console.log('[Vapi Functions] Function:', name);
-      console.log('[Vapi Functions] Parameters:', parameters);
-    }
-
-    // Route to appropriate function handler
-    let result;
-    
-    switch (name) {
-      case 'get_products':
-        result = await handleGetProducts(parameters, shopDomain);
-        break;
-      
-      case 'search_products':
-        result = await handleSearchProducts(parameters, shopDomain);
-        break;
-      
-      default:
-        console.error('[Vapi Functions] Unknown function:', name);
-        result = {
-          error: `Unknown function: ${name}`,
-        };
-    }
-
-    if (isDev) {
-      console.log('[Vapi Functions] Result:', JSON.stringify(result, null, 2));
-      console.log('[Vapi Functions] ═══════════════════════════════════════');
-    }
-
-    // Return result in Vapi's expected format
-    return NextResponse.json({
-      results: [result],
-    });
 
   } catch (error: any) {
     console.error('[Vapi Functions] Error:', error);
