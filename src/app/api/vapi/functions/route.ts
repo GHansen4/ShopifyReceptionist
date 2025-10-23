@@ -149,6 +149,17 @@ export async function POST(request: NextRequest) {
       });
     }
     
+    // Handle speech updates (AI finished speaking)
+    if (messageType === 'speech-update') {
+      console.log('[Vapi Functions] ✅ Speech update received - acknowledging');
+      return NextResponse.json({
+        results: [{
+          message: 'Speech update acknowledged',
+          status: 'success'
+        }],
+      });
+    }
+    
     // Handle function calls (when AI wants to fetch data)
     if (messageType === 'function-call') {
       console.log('[Vapi Functions] ✅ Function call received - processing');
