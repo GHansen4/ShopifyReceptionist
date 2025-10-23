@@ -40,18 +40,45 @@ export async function POST(request: NextRequest) {
     console.log(`[${requestId}] Authenticated shop: ${shopContext.shop}`);
 
     // ======================================================================
-    // Step 2: Fetch Shop Data
+    // Step 2: Fetch Shop Data from shopify_sessions (where OAuth actually saves data)
     // ======================================================================
+    console.log(`[${requestId}] Looking for shop in shopify_sessions table: ${shopContext.shop}`);
+    
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: shop, error: shopError } = await (supabase as any)
-      .from('shops')
+    const { data: session, error: sessionError } = await (supabase as any)
+      .from('shopify_sessions')
       .select('*')
-      .eq('shop_domain', shopContext.shop)
+      .eq('shop', shopContext.shop)
       .single();
 
-    if (shopError || !shop) {
-      return createErrorResponse(new ExternalServiceError('Shop not found', 'supabase'));
+    if (sessionError || !session) {
+      console.error(`[${requestId}] ❌ Shop not found in shopify_sessions:`, sessionError);
+      return createErrorResponse(new ExternalServiceError('Shop not found - OAuth may not have completed properly', 'supabase'));
     }
+
+    console.log(`[${requestId}] ✅ Found shop session: ${session.shop}`);
+    
+    // Create shop object from session data
+    const shop = {
+      id: session.id,
+      shop_domain: session.shop,
+      shop_name: session.shop.replace('.myshopify.com', ''),
+      access_token: session.access_token,
+      installed_at: session.created_at,
+      subscription_status: 'trial',
+      plan_name: 'starter',
+      call_minutes_used: 0,
+      call_minutes_limit: 100,
+      vapi_assistant_id: null,
+      vapi_phone_number_id: null,
+      phone_number: null,
+      settings: {},
+      email: null,
+      timezone: 'UTC',
+      phone_number: null,
+      updated_at: session.updated_at,
+      created_at: session.created_at
+    };
 
     console.log(`[${requestId}] Found shop: ${shop.shop_name || shop.shop_domain}`);
 
@@ -223,20 +250,20 @@ export async function GET(request: NextRequest) {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: shop, error } = await (supabase as any)
-      .from('shops')
-      .select('id, vapi_assistant_id, phone_number')
-      .eq('shop_domain', shopContext.shop)
+    const { data: session, error } = await (supabase as any)
+      .from('shopify_sessions')
+      .select('id, shop, vapi_assistant_id, phone_number')
+      .eq('shop', shopContext.shop)
       .single();
 
-    if (error || !shop) {
-      return createErrorResponse(new ExternalServiceError('Shop not found', 'supabase'));
+    if (error || !session) {
+      return createErrorResponse(new ExternalServiceError('Shop not found - OAuth may not have completed properly', 'supabase'));
     }
 
     return createSuccessResponse({
-      isProvisioned: !!(shop.vapi_assistant_id && shop.phone_number),
-      assistantId: (shop.vapi_assistant_id as string) || null,
-      phoneNumber: (shop.phone_number as string) || null,
+      isProvisioned: !!(session.vapi_assistant_id && session.phone_number),
+      assistantId: (session.vapi_assistant_id as string) || null,
+      phoneNumber: (session.phone_number as string) || null,
     });
   } catch (error) {
     return createErrorResponse(error as Error);
