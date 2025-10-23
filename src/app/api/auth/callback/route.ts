@@ -130,24 +130,39 @@ export async function GET(request: NextRequest) {
     session.accessToken = accessToken;
     session.isOnline = false;
     
-    // Store session via our SupabaseSessionStorage with proper error handling
+    // Store session via our SupabaseSessionStorage with detailed debugging
     try {
-      console.log('[OAuth Callback] Storing session in shopify_sessions table...');
+      console.log('[OAuth Callback] 🔍 About to store session:', {
+        id: session.id,
+        shop: session.shop,
+        accessTokenPrefix: session.accessToken?.substring(0, 10)
+      });
+
       const storeResult = await shopify.config.sessionStorage.storeSession(session);
-      
+
+      console.log('[OAuth Callback] Session store result:', storeResult);
+
       if (!storeResult) {
+        console.error('[OAuth Callback] ❌ CRITICAL: storeSession returned false');
         throw new Error('storeSession() returned false - session storage failed');
       }
       
       console.log('[OAuth Callback] ✅ Session stored in shopify_sessions');
       
-      // VERIFY IT ACTUALLY SAVED
+      // Verify it actually saved
       console.log('[OAuth Callback] 🔍 Verifying session was saved to shopify_sessions...');
       const { data: verifySession, error: verifyError } = await supabaseAdmin
         .from('shopify_sessions')
         .select('id, shop, access_token')
-        .eq('shop', shop)
+        .eq('id', session.id)
         .single();
+      
+      console.log('[OAuth Callback] Verification check:', {
+        found: !!verifySession,
+        error: verifyError?.message,
+        sessionId: session.id,
+        shop: shop
+      });
       
       if (verifyError || !verifySession) {
         console.error('[OAuth Callback] ❌ CRITICAL: Session verification failed:', verifyError);
