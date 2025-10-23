@@ -5,62 +5,89 @@ export async function GET(request: NextRequest) {
   const requestId = Math.random().toString(36).substring(7);
   
   try {
-    console.log(`[${requestId}] 🔍 Checking existing database tables...`);
+    console.log(`[${requestId}] 🔍 Testing database table access...`);
     
-    // Check what tables exist
-    const { data: tables, error: tablesError } = await supabaseAdmin
-      .from('information_schema.tables')
-      .select('table_name')
-      .eq('table_schema', 'public');
+    const results = {
+      shopify_sessions: { exists: false, error: null, sampleData: null },
+      shops: { exists: false, error: null, sampleData: null },
+      recommendations: []
+    };
     
-    if (tablesError) {
-      console.error(`[${requestId}] ❌ Failed to list tables:`, tablesError);
-      return NextResponse.json({
-        success: false,
-        error: 'Failed to list tables',
-        details: tablesError
-      });
+    // ======================================================================
+    // Test shopify_sessions table
+    // ======================================================================
+    console.log(`[${requestId}] Testing shopify_sessions table...`);
+    
+    try {
+      const { data: sessionData, error: sessionError } = await supabaseAdmin
+        .from('shopify_sessions')
+        .select('*')
+        .limit(1);
+      
+      if (sessionError) {
+        console.log(`[${requestId}] shopify_sessions error:`, sessionError);
+        results.shopify_sessions.error = sessionError.message;
+      } else {
+        console.log(`[${requestId}] ✅ shopify_sessions accessible, found ${sessionData?.length || 0} records`);
+        results.shopify_sessions.exists = true;
+        results.shopify_sessions.sampleData = sessionData?.[0] || null;
+      }
+    } catch (sessionException) {
+      console.error(`[${requestId}] shopify_sessions exception:`, sessionException);
+      results.shopify_sessions.error = sessionException instanceof Error ? sessionException.message : 'Unknown error';
     }
     
-    console.log(`[${requestId}] Found tables:`, tables);
+    // ======================================================================
+    // Test shops table
+    // ======================================================================
+    console.log(`[${requestId}] Testing shops table...`);
     
-    // Check shopify_sessions table structure
-    const { data: sessionColumns, error: sessionError } = await supabaseAdmin
-      .from('information_schema.columns')
-      .select('column_name, data_type')
-      .eq('table_name', 'shopify_sessions')
-      .eq('table_schema', 'public');
+    try {
+      const { data: shopsData, error: shopsError } = await supabaseAdmin
+        .from('shops')
+        .select('*')
+        .limit(1);
+      
+      if (shopsError) {
+        console.log(`[${requestId}] shops error:`, shopsError);
+        results.shops.error = shopsError.message;
+      } else {
+        console.log(`[${requestId}] ✅ shops accessible, found ${shopsData?.length || 0} records`);
+        results.shops.exists = true;
+        results.shops.sampleData = shopsData?.[0] || null;
+      }
+    } catch (shopsException) {
+      console.error(`[${requestId}] shops exception:`, shopsException);
+      results.shops.error = shopsException instanceof Error ? shopsException.message : 'Unknown error';
+    }
     
-    if (sessionError) {
-      console.error(`[${requestId}] ❌ Failed to get shopify_sessions columns:`, sessionError);
+    // ======================================================================
+    // Generate recommendations
+    // ======================================================================
+    if (results.shopify_sessions.exists) {
+      results.recommendations.push('✅ shopify_sessions table exists and is accessible');
     } else {
-      console.log(`[${requestId}] shopify_sessions columns:`, sessionColumns);
+      results.recommendations.push('❌ shopify_sessions table not accessible - OAuth may not have completed');
     }
     
-    // Check if shops table exists
-    const { data: shopsColumns, error: shopsError } = await supabaseAdmin
-      .from('information_schema.columns')
-      .select('column_name, data_type')
-      .eq('table_name', 'shops')
-      .eq('table_schema', 'public');
-    
-    if (shopsError) {
-      console.log(`[${requestId}] shops table doesn't exist or no access:`, shopsError.message);
+    if (results.shops.exists) {
+      results.recommendations.push('✅ shops table exists and is accessible');
+      results.recommendations.push('💡 Use shops table for storing Vapi provisioning data');
     } else {
-      console.log(`[${requestId}] shops table columns:`, shopsColumns);
+      results.recommendations.push('❌ shops table does not exist');
+      results.recommendations.push('💡 Need to create shops table or use alternative storage');
     }
+    
+    console.log(`[${requestId}] Database check complete:`, results);
     
     return NextResponse.json({
       success: true,
-      tables: tables?.map(t => t.table_name) || [],
-      shopify_sessions_columns: sessionColumns || [],
-      shops_table_exists: !shopsError,
-      shops_columns: shopsColumns || [],
-      recommendations: [
-        'shopify_sessions has fixed schema from Shopify OAuth',
-        'Need to create separate table for Vapi data or use existing shops table',
-        'Check if shops table exists and has proper columns'
-      ]
+      results,
+      summary: {
+        shopify_sessions_accessible: results.shopify_sessions.exists,
+        shops_table_accessible: results.shops.exists,
+        next_steps: results.recommendations
+      }
     });
     
   } catch (error) {
