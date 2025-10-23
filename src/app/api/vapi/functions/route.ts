@@ -81,9 +81,10 @@ export async function POST(request: NextRequest) {
     }
     
     // ======================================================================
-    // Parse Request Body First
+    // CRITICAL FIX: Read body once, reuse
     // ======================================================================
-    const body = await request.json();
+    const rawBody = await request.text();
+    const body = JSON.parse(rawBody);
 
     // ======================================================================
     // DEBUG: Log the complete request structure
@@ -113,14 +114,22 @@ export async function POST(request: NextRequest) {
     // ======================================================================
     // Resolve Shop via Assistant ID (Vapi calls)
     // ======================================================================
-    // Extract assistant ID from the request body
-    const assistantId = body?.assistant?.id;
+    // Extract assistant ID from the request body - try multiple possible paths
+    const assistantId = body?.assistantId || body?.assistant_id || body?.assistant?.id;
     
     if (!assistantId) {
       console.error('[Vapi Functions] ❌ No assistant ID found in request');
+      console.warn('[Vapi Functions] Available body keys:', Object.keys(body || {}));
+      console.warn('[Vapi Functions] Body structure:', {
+        hasAssistant: !!body?.assistant,
+        hasAssistantId: !!body?.assistantId,
+        hasAssistant_id: !!body?.assistant_id,
+        assistantKeys: body?.assistant ? Object.keys(body.assistant) : 'no assistant object'
+      });
       return NextResponse.json({
         results: [{
-          error: 'No assistant ID provided',
+          error: 'NO_ASSISTANT_ID',
+          details: 'No assistant ID found in request body'
         }],
       }, { status: 400 });
     }
