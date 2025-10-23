@@ -282,7 +282,13 @@ export async function POST(request: NextRequest) {
 async function handleGetProducts(parameters: any, shopDomain: string) {
   try {
     const limit = parameters?.limit || 5;
-    const shop = shopDomain;
+    
+    // CRITICAL FIX: Ensure shopDomain is a string, not an object
+    const shop = typeof shopDomain === 'string' ? shopDomain : 'always-ai-dev-store.myshopify.com';
+    
+    console.log(`[get_products] 🔍 DEBUG: shopDomain type: ${typeof shopDomain}`);
+    console.log(`[get_products] 🔍 DEBUG: shopDomain value:`, shopDomain);
+    console.log(`[get_products] 🔍 DEBUG: resolved shop: "${shop}"`);
 
     console.log(`[get_products] Fetching ${limit} products for ${shop}`);
 
@@ -401,7 +407,13 @@ async function handleGetProducts(parameters: any, shopDomain: string) {
 async function handleSearchProducts(parameters: any, shopDomain: string) {
   try {
     const query = parameters?.query || '';
-    const shop = shopDomain;
+    
+    // CRITICAL FIX: Ensure shopDomain is a string, not an object
+    const shop = typeof shopDomain === 'string' ? shopDomain : 'always-ai-dev-store.myshopify.com';
+    
+    console.log(`[search_products] 🔍 DEBUG: shopDomain type: ${typeof shopDomain}`);
+    console.log(`[search_products] 🔍 DEBUG: shopDomain value:`, shopDomain);
+    console.log(`[search_products] 🔍 DEBUG: resolved shop: "${shop}"`);
 
     if (!query) {
       return {
