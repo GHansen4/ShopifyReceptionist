@@ -250,29 +250,39 @@ Remember: You have access to real product data. Use it to give accurate, helpful
     // ======================================================================
     console.log(`[${requestId}] Saving to database...`);
 
-    // Find shop
-    const { data: shopData, error: shopError } = await supabaseAdmin
-      .from('shops')
-      .select('id')
-      .eq('shop_domain', shop)
+    // Find shop in shopify_sessions table (where OAuth actually saves data)
+    console.log(`[${requestId}] Looking for shop in shopify_sessions table: ${shop}`);
+    const { data: sessionData, error: sessionError } = await supabaseAdmin
+      .from('shopify_sessions')
+      .select('id, shop, access_token')
+      .eq('shop', shop)
       .single();
 
-    if (shopError || !shopData) {
-      console.error(`[${requestId}] ❌ Shop not found: ${shop}`);
+    console.log(`[${requestId}] Session query result:`, {
+      error: sessionError,
+      session: sessionData,
+      shopDomain: shop
+    });
+
+    if (sessionError || !sessionData) {
+      console.error(`[${requestId}] ❌ Shop not found in shopify_sessions: ${shop}`);
+      console.error(`[${requestId}] Session error:`, sessionError);
       // Still return success, just couldn't save
       return createSuccessResponse({
         assistantId: assistant.id,
         phoneNumber: phoneNumber.number,
         phoneNumberId: phoneNumber.id,
         assistantName: assistant.name,
-        message: 'Test provisioning complete (not saved - shop not found)',
-        warning: 'Shop not found in database',
+        message: 'Test provisioning complete (not saved - shop not found in sessions)',
+        warning: 'Shop not found in shopify_sessions table - OAuth may not have completed',
       });
     }
 
-    // Update shop with test assistant info
+    console.log(`[${requestId}] ✅ Found shop session: ${sessionData.shop}`);
+
+    // Update session with test assistant info
     const { error: updateError } = await supabaseAdmin
-      .from('shops')
+      .from('shopify_sessions')
       .update({
         vapi_assistant_id: assistant.id,
         phone_number: phoneNumber.number,
@@ -283,7 +293,7 @@ Remember: You have access to real product data. Use it to give accurate, helpful
         },
         updated_at: new Date().toISOString(),
       })
-      .eq('id', shopData.id);
+      .eq('id', sessionData.id);
 
     if (updateError) {
       console.error(`[${requestId}] ⚠️  Database save failed:`, updateError);
