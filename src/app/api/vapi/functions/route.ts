@@ -29,11 +29,22 @@ export async function POST(request: NextRequest) {
     // This endpoint is publicly accessible (called by Vapi during phone calls)
     // We use API key authentication instead of Shopify session tokens
     
-    const apiKey = request.headers.get('x-api-key') || request.headers.get('authorization')?.replace('Bearer ', '');
+    // Support multiple authentication methods:
+    // 1. X-Vapi-Secret (Vapi's preferred method)
+    // 2. x-api-key (fallback)
+    // 3. Authorization Bearer (fallback)
+    const apiKey = request.headers.get('x-vapi-secret') || 
+                   request.headers.get('x-api-key') || 
+                   request.headers.get('authorization')?.replace('Bearer ', '');
     const expectedKey = process.env.VAPI_API_KEY;
     
     if (!apiKey || apiKey !== expectedKey) {
       console.error('[Vapi Functions] ❌ Unauthorized: Invalid or missing API key');
+      console.error('[Vapi Functions] Headers received:', {
+        'x-vapi-secret': request.headers.get('x-vapi-secret') ? 'present' : 'missing',
+        'x-api-key': request.headers.get('x-api-key') ? 'present' : 'missing',
+        'authorization': request.headers.get('authorization') ? 'present' : 'missing'
+      });
       return NextResponse.json({
         results: [{
           error: 'Unauthorized: Invalid API key',
