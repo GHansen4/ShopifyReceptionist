@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SupabaseSessionStorage } from '@/lib/shopify/session-storage';
+import { getShopContext } from '@/lib/shopify/context';
 
 /**
  * Vapi Function Calling Endpoint
@@ -45,6 +46,21 @@ export async function POST(request: NextRequest) {
     }
     
     // ======================================================================
+    // Get Shop Context
+    // ======================================================================
+    const shopContext = getShopContext(request);
+    if (!shopContext) {
+      console.error('[Vapi Functions] ❌ No shop context found in request');
+      return NextResponse.json({
+        results: [{
+          error: 'Shop context required',
+        }],
+      }, { status: 400 });
+    }
+
+    console.log(`[Vapi Functions] Shop context: ${shopContext.shop}`);
+
+    // ======================================================================
     // Process Function Call
     // ======================================================================
     
@@ -80,11 +96,11 @@ export async function POST(request: NextRequest) {
     
     switch (name) {
       case 'get_products':
-        result = await handleGetProducts(parameters);
+        result = await handleGetProducts(parameters, shopContext.shop);
         break;
       
       case 'search_products':
-        result = await handleSearchProducts(parameters);
+        result = await handleSearchProducts(parameters, shopContext.shop);
         break;
       
       default:
@@ -119,10 +135,10 @@ export async function POST(request: NextRequest) {
  * Get Products Handler
  * Fetches products from Shopify
  */
-async function handleGetProducts(parameters: any) {
+async function handleGetProducts(parameters: any, shopDomain: string) {
   try {
     const limit = parameters?.limit || 5;
-    const shop = parameters?.shop || 'always-ai-dev-store.myshopify.com';
+    const shop = shopDomain;
 
     console.log(`[get_products] Fetching ${limit} products for ${shop}`);
 
@@ -194,10 +210,10 @@ async function handleGetProducts(parameters: any) {
  * Search Products Handler
  * Searches products by keyword
  */
-async function handleSearchProducts(parameters: any) {
+async function handleSearchProducts(parameters: any, shopDomain: string) {
   try {
     const query = parameters?.query || '';
-    const shop = parameters?.shop || 'always-ai-dev-store.myshopify.com';
+    const shop = shopDomain;
 
     if (!query) {
       return {
