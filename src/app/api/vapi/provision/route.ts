@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getShopContext } from '@/lib/shopify/context';
-import { supabase } from '@/lib/supabase/client';
+import { supabaseAdmin } from '@/lib/supabase/client';
 import {
   provisionReceptionist,
   validateAssistantConfig,
@@ -9,6 +9,7 @@ import {
 import { createSuccessResponse, createErrorResponse } from '@/lib/utils/api';
 import { AuthenticationError, ExternalServiceError, ValidationError } from '@/lib/utils/errors';
 import { logError } from '@/lib/utils/errors';
+import { normalizeShopDomain } from '@/lib/normalize';
 
 /**
  * POST /api/vapi/provision
@@ -184,8 +185,11 @@ export async function POST(request: NextRequest) {
     // ======================================================================
     console.log(`[${requestId}] Saving provisioning results to database...`);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase as any)
+    // Update shops table using normalized shop domain
+    const normalizedShopDomain = normalizeShopDomain(shopContext.shop);
+    console.log(`[${requestId}] Updating shops table for normalized domain: ${normalizedShopDomain}`);
+    
+    const { error: updateError } = await supabaseAdmin
       .from('shops')
       .update({
         vapi_assistant_id: provisioningResult.assistantId,
@@ -198,7 +202,7 @@ export async function POST(request: NextRequest) {
         },
         updated_at: new Date().toISOString(),
       })
-      .eq('id', shop.id);
+      .eq('shop_domain', normalizedShopDomain);
 
     if (updateError) {
       logError(updateError, {
