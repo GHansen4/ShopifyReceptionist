@@ -205,7 +205,7 @@ export async function createVapiAssistant(config: VapiAssistantConfig): Promise<
             },
           },
           {
-            name: 'product_search',
+            name: 'search_products',
             description: 'Search for products by name or category',
             parameters: {
               type: 'object',
