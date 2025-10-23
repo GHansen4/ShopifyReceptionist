@@ -212,10 +212,16 @@ export async function POST(request: NextRequest) {
       // Handle the function call
       if (name === 'get_products') {
         console.log('[Vapi Functions] Processing get_products function...');
-        return await handleGetProducts(shopDomain, parameters);
+        const result = await handleGetProducts(shopDomain, parameters);
+        return NextResponse.json({
+          results: [result],
+        });
       } else if (name === 'search_products') {
         console.log('[Vapi Functions] Processing search_products function...');
-        return await handleSearchProducts(shopDomain, parameters);
+        const result = await handleSearchProducts(shopDomain, parameters);
+        return NextResponse.json({
+          results: [result],
+        });
       } else {
         console.error('[Vapi Functions] ❌ Unknown function:', name);
         return NextResponse.json({
