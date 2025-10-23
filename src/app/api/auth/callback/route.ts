@@ -139,6 +139,8 @@ export async function GET(request: NextRequest) {
 
     // Store shop metadata in shops table
     try {
+      console.log('[OAuth Callback] Storing shop metadata in shops table...');
+      
       const { error } = await supabaseAdmin
         .from('shops')
         .upsert({
@@ -147,18 +149,28 @@ export async function GET(request: NextRequest) {
           access_token: accessToken,
           installed_at: new Date().toISOString(),
           subscription_status: 'trial',
+          plan_name: 'starter',
+          call_minutes_used: 0,
+          call_minutes_limit: 100,
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'shop_domain'
         });
 
       if (error) {
-        console.error('[OAuth Callback] Failed to store shop metadata:', error);
-      } else if (process.env.NODE_ENV === 'development') {
-        console.log('[OAuth Callback] ✅ Shop metadata stored');
+        console.error('[OAuth Callback] ❌ Failed to store shop metadata:', error);
+        console.error('[OAuth Callback] Error details:', {
+          message: error.message,
+          code: error.code,
+          hint: error.hint
+        });
+      } else {
+        console.log('[OAuth Callback] ✅ Shop metadata stored successfully');
       }
     } catch (metadataError) {
-      console.error('[OAuth Callback] Error storing shop metadata:', metadataError);
+      console.error('[OAuth Callback] ❌ Error storing shop metadata:', metadataError);
+      console.error('[OAuth Callback] Error type:', typeof metadataError);
+      console.error('[OAuth Callback] Error message:', metadataError instanceof Error ? metadataError.message : 'Unknown error');
     }
 
     if (process.env.NODE_ENV === 'development') {
