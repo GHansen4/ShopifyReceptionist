@@ -138,6 +138,17 @@ export async function POST(request: NextRequest) {
       });
     }
     
+    // Handle conversation updates (AI speaking to customer)
+    if (messageType === 'conversation-update') {
+      console.log('[Vapi Functions] ✅ Conversation update received - acknowledging');
+      return NextResponse.json({
+        results: [{
+          message: 'Conversation update acknowledged',
+          status: 'success'
+        }],
+      });
+    }
+    
     // Handle function calls (when AI wants to fetch data)
     if (messageType === 'function-call') {
       console.log('[Vapi Functions] ✅ Function call received - processing');
