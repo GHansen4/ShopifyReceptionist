@@ -367,8 +367,25 @@ async function handleGetProducts(parameters: any, shopDomain: string) {
 
     if (!response.ok) {
       console.error('[get_products] Shopify API error:', response.status);
+      
+      // DEBUG: Get detailed error information
+      const errorText = await response.text();
+      console.error('[get_products] 🔍 DEBUG: Shopify API error details:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: errorText,
+        accessToken: session.access_token ? `${session.access_token.substring(0, 20)}...` : 'missing'
+      });
+      
       return {
         error: 'Failed to fetch products from store',
+        details: `Shopify API error ${response.status}: ${response.statusText}`,
+        debug: {
+          status: response.status,
+          statusText: response.statusText,
+          errorBody: errorText
+        }
       };
     }
 
@@ -498,8 +515,25 @@ async function handleSearchProducts(parameters: any, shopDomain: string) {
 
     if (!response.ok) {
       console.error('[search_products] Shopify API error:', response.status);
+      
+      // DEBUG: Get detailed error information
+      const errorText = await response.text();
+      console.error('[search_products] 🔍 DEBUG: Shopify API error details:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: errorText,
+        accessToken: session.access_token ? `${session.access_token.substring(0, 20)}...` : 'missing'
+      });
+      
       return {
         error: 'Failed to search products',
+        details: `Shopify API error ${response.status}: ${response.statusText}`,
+        debug: {
+          status: response.status,
+          statusText: response.statusText,
+          errorBody: errorText
+        }
       };
     }
 
