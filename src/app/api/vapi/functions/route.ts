@@ -288,16 +288,54 @@ async function handleGetProducts(parameters: any, shopDomain: string) {
 
     // Load Shopify session directly from shopify_sessions table
     const { supabaseAdmin } = await import('@/lib/supabase/client');
+    
+    // DEBUG: Log the exact shop parameter being used
+    console.log(`[get_products] 🔍 DEBUG: Searching for shop: "${shop}"`);
+    console.log(`[get_products] 🔍 DEBUG: Shop type: ${typeof shop}, length: ${shop?.length}`);
+    
+    // Try the query with detailed logging
     const { data: session, error: sessionError } = await supabaseAdmin
       .from('shopify_sessions')
       .select('*')
       .eq('shop', shop)
       .maybeSingle();
 
-    if (sessionError || !session) {
-      console.error(`[get_products] ❌ Shop session not found:`, sessionError);
+    console.log(`[get_products] 🔍 DEBUG: Query result:`, {
+      hasSession: !!session,
+      sessionError: sessionError,
+      sessionShop: session?.shop,
+      sessionAccessToken: session?.access_token ? 'present' : 'missing'
+    });
+
+    if (sessionError) {
+      console.error(`[get_products] ❌ Database error:`, sessionError);
+      return {
+        error: 'Database error - session lookup failed',
+        details: sessionError.message
+      };
+    }
+
+    if (!session) {
+      console.error(`[get_products] ❌ No session found for shop: "${shop}"`);
+      
+      // DEBUG: Try to find any sessions to see what's in the database
+      const { data: allSessions, error: allSessionsError } = await supabaseAdmin
+        .from('shopify_sessions')
+        .select('shop, created_at')
+        .limit(5);
+      
+      console.log(`[get_products] 🔍 DEBUG: All sessions in database:`, {
+        allSessions,
+        allSessionsError,
+        totalSessions: allSessions?.length || 0
+      });
+      
       return {
         error: 'Store not authenticated - session not found',
+        debug: {
+          searchedFor: shop,
+          availableSessions: allSessions?.map(s => s.shop) || []
+        }
       };
     }
 
@@ -375,16 +413,54 @@ async function handleSearchProducts(parameters: any, shopDomain: string) {
 
     // Load Shopify session directly from shopify_sessions table
     const { supabaseAdmin } = await import('@/lib/supabase/client');
+    
+    // DEBUG: Log the exact shop parameter being used
+    console.log(`[search_products] 🔍 DEBUG: Searching for shop: "${shop}"`);
+    console.log(`[search_products] 🔍 DEBUG: Shop type: ${typeof shop}, length: ${shop?.length}`);
+    
+    // Try the query with detailed logging
     const { data: session, error: sessionError } = await supabaseAdmin
       .from('shopify_sessions')
       .select('*')
       .eq('shop', shop)
       .maybeSingle();
 
-    if (sessionError || !session) {
-      console.error(`[search_products] ❌ Shop session not found:`, sessionError);
+    console.log(`[search_products] 🔍 DEBUG: Query result:`, {
+      hasSession: !!session,
+      sessionError: sessionError,
+      sessionShop: session?.shop,
+      sessionAccessToken: session?.access_token ? 'present' : 'missing'
+    });
+
+    if (sessionError) {
+      console.error(`[search_products] ❌ Database error:`, sessionError);
+      return {
+        error: 'Database error - session lookup failed',
+        details: sessionError.message
+      };
+    }
+
+    if (!session) {
+      console.error(`[search_products] ❌ No session found for shop: "${shop}"`);
+      
+      // DEBUG: Try to find any sessions to see what's in the database
+      const { data: allSessions, error: allSessionsError } = await supabaseAdmin
+        .from('shopify_sessions')
+        .select('shop, created_at')
+        .limit(5);
+      
+      console.log(`[search_products] 🔍 DEBUG: All sessions in database:`, {
+        allSessions,
+        allSessionsError,
+        totalSessions: allSessions?.length || 0
+      });
+      
       return {
         error: 'Store not authenticated - session not found',
+        debug: {
+          searchedFor: shop,
+          availableSessions: allSessions?.map(s => s.shop) || []
+        }
       };
     }
 
