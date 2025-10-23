@@ -27,22 +27,33 @@ export async function POST(request: NextRequest) {
   const requestId = Math.random().toString(36).substring(7);
 
   try {
-    console.log(`[${requestId}] Starting Vapi provision request...`);
+    console.log(`[${requestId}] 🔍 VAPI PROVISION DEBUG: Starting detailed debugging...`);
+    console.log(`[${requestId}] Request headers:`, {
+      'x-shopify-shop': request.headers.get('x-shopify-shop'),
+      'x-shopify-session-token': request.headers.get('x-shopify-session-token'),
+      'x-shopify-user-id': request.headers.get('x-shopify-user-id'),
+      'authorization': request.headers.get('authorization'),
+      'host': request.headers.get('host')
+    });
 
     // ======================================================================
     // Step 1: Validate Authentication
     // ======================================================================
+    console.log(`[${requestId}] STEP 1: Extracting shop context...`);
     const shopContext = getShopContext(request);
+    console.log(`[${requestId}] Shop context result:`, shopContext);
+    
     if (!shopContext) {
+      console.log(`[${requestId}] ❌ STEP 1 FAILED: No shop context found`);
       return createErrorResponse(new AuthenticationError('Session token required'));
     }
 
-    console.log(`[${requestId}] Authenticated shop: ${shopContext.shop}`);
+    console.log(`[${requestId}] ✅ STEP 1 SUCCESS: Authenticated shop: ${shopContext.shop}`);
 
     // ======================================================================
     // Step 2: Fetch Shop Data from shopify_sessions (where OAuth actually saves data)
     // ======================================================================
-    console.log(`[${requestId}] Looking for shop in shopify_sessions table: ${shopContext.shop}`);
+    console.log(`[${requestId}] STEP 2: Looking for shop in shopify_sessions table: ${shopContext.shop}`);
     
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: session, error: sessionError } = await (supabase as any)
@@ -51,12 +62,18 @@ export async function POST(request: NextRequest) {
       .eq('shop', shopContext.shop)
       .single();
 
+    console.log(`[${requestId}] STEP 2 Database query result:`, {
+      error: sessionError,
+      session: session,
+      shopDomain: shopContext.shop
+    });
+
     if (sessionError || !session) {
-      console.error(`[${requestId}] ❌ Shop not found in shopify_sessions:`, sessionError);
+      console.error(`[${requestId}] ❌ STEP 2 FAILED: Shop not found in shopify_sessions:`, sessionError);
       return createErrorResponse(new ExternalServiceError('Shop not found - OAuth may not have completed properly', 'supabase'));
     }
 
-    console.log(`[${requestId}] ✅ Found shop session: ${session.shop}`);
+    console.log(`[${requestId}] ✅ STEP 2 SUCCESS: Found shop session: ${session.shop}`);
     
     // Create shop object from session data
     const shop = {
