@@ -292,7 +292,7 @@ async function handleGetProducts(parameters: any, shopDomain: string) {
       .from('shopify_sessions')
       .select('*')
       .eq('shop', shop)
-      .single();
+      .maybeSingle();
 
     if (sessionError || !session) {
       console.error(`[get_products] ❌ Shop session not found:`, sessionError);
@@ -379,7 +379,7 @@ async function handleSearchProducts(parameters: any, shopDomain: string) {
       .from('shopify_sessions')
       .select('*')
       .eq('shop', shop)
-      .single();
+      .maybeSingle();
 
     if (sessionError || !session) {
       console.error(`[search_products] ❌ Shop session not found:`, sessionError);
