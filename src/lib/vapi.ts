@@ -219,7 +219,7 @@ export async function createVapiAssistant(config: VapiAssistantConfig): Promise<
             },
           },
         ],
-        serverUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.SHOPIFY_APP_URL}/api/vapi/functions`,
+        serverUrl: `${process.env.NEXT_PUBLIC_APP_URL || process.env.SHOPIFY_APP_URL}/api/vapi/functions/${config.shopId}`,
         serverUrlSecret: process.env.VAPI_API_KEY,
       };
 
