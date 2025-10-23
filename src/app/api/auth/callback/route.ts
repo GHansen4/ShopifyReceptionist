@@ -165,8 +165,26 @@ export async function GET(request: NextRequest) {
         console.error('[OAuth Callback] ❌ Admin client failed:', error);
         lastError = error;
       } else {
-        console.log('[OAuth Callback] ✅ Shop metadata stored successfully via admin client');
-        shopSaveSuccess = true;
+      console.log('[OAuth Callback] ✅ Shop metadata stored successfully via admin client');
+      shopSaveSuccess = true;
+      
+      // DEBUG: Verify the token was actually saved
+      console.log('[OAuth Callback] 🔍 DEBUG: Verifying saved token...');
+      const { data: verifySession, error: verifyError } = await supabaseAdmin
+        .from('shopify_sessions')
+        .select('shop, access_token')
+        .eq('shop', shop)
+        .single();
+      
+      if (verifyError || !verifySession) {
+        console.error('[OAuth Callback] ❌ CRITICAL: Token verification failed:', verifyError);
+      } else {
+        console.log('[OAuth Callback] ✅ Token verification successful:', {
+          shop: verifySession.shop,
+          tokenPrefix: verifySession.access_token?.substring(0, 10),
+          tokenLength: verifySession.access_token?.length
+        });
+      }
       }
     } catch (adminError) {
       console.error('[OAuth Callback] ❌ Admin client exception:', adminError);
