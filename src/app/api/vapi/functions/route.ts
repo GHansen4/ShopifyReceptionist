@@ -120,6 +120,37 @@ export async function POST(request: NextRequest) {
     console.log('[Vapi Functions] ═══════════════════════════════════════');
     console.log('[Vapi Functions] Processing function call...');
 
+    // ======================================================================
+    // Check Message Type First
+    // ======================================================================
+    const messageType = body?.message?.type;
+    console.log('[Vapi Functions] 🔍 MESSAGE TYPE CHECK:');
+    console.log('[Vapi Functions] Message type:', messageType);
+    
+    // Handle status updates (call progress notifications)
+    if (messageType === 'status-update') {
+      console.log('[Vapi Functions] ✅ Status update received - acknowledging');
+      return NextResponse.json({
+        results: [{
+          message: 'Status update acknowledged',
+          status: 'success'
+        }],
+      });
+    }
+    
+    // Handle function calls (when AI wants to fetch data)
+    if (messageType === 'function-call') {
+      console.log('[Vapi Functions] ✅ Function call received - processing');
+    } else {
+      console.log('[Vapi Functions] ⚠️  Unknown message type:', messageType);
+      console.log('[Vapi Functions] Available body keys:', body ? Object.keys(body) : 'no body');
+      return NextResponse.json({
+        results: [{
+          error: `Unknown message type: ${messageType}`,
+        }],
+      }, { status: 400 });
+    }
+
     // Extract function call details - try multiple possible locations
     const functionCall = body?.message?.functionCall || body?.functionCall || body?.function;
     
