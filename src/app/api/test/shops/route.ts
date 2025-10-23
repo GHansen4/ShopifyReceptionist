@@ -1,12 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 
 export async function GET(request: NextRequest) {
   try {
     console.log('[Test Shops] Fetching all shops from database...');
     
-    // Fetch all shops from the database
-    const { data: shops, error } = await supabaseAdmin
+    // Check environment variables first
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    console.log('[Test Shops] Environment check:', {
+      hasSupabaseUrl: !!supabaseUrl,
+      hasAnonKey: !!supabaseAnonKey,
+      hasServiceRoleKey: !!serviceRoleKey,
+      supabaseUrl: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'MISSING'
+    });
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return NextResponse.json({ 
+        error: 'Supabase configuration missing',
+        details: {
+          hasSupabaseUrl: !!supabaseUrl,
+          hasAnonKey: !!supabaseAnonKey,
+          hasServiceRoleKey: !!serviceRoleKey
+        }
+      }, { status: 500 });
+    }
+    
+    // Try to fetch shops using regular client
+    const { data: shops, error } = await supabase
       .from('shops')
       .select('id, shop_domain, shop_name, created_at, subscription_status')
       .order('created_at', { ascending: false });
@@ -15,7 +38,9 @@ export async function GET(request: NextRequest) {
       console.error('[Test Shops] Database error:', error);
       return NextResponse.json({ 
         error: 'Database error', 
-        details: error.message 
+        details: error.message,
+        code: error.code,
+        hint: error.hint
       }, { status: 500 });
     }
 
@@ -24,14 +49,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       shops: shops || [],
-      count: shops?.length || 0
+      count: shops?.length || 0,
+      environment: {
+        hasSupabaseUrl: !!supabaseUrl,
+        hasAnonKey: !!supabaseAnonKey,
+        hasServiceRoleKey: !!serviceRoleKey
+      }
     });
 
   } catch (error) {
     console.error('[Test Shops] Error:', error);
     return NextResponse.json({ 
       error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      details: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
     }, { status: 500 });
   }
 }
