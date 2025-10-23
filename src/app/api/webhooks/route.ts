@@ -8,6 +8,9 @@ import {
 import { logError } from '@/lib/utils/errors';
 import { withWebhookRateLimit } from '@/lib/rate-limiter-middleware';
 
+// Ensure Node.js runtime for this sensitive route
+export const runtime = 'nodejs';
+
 /**
  * Webhook endpoint for receiving Shopify webhooks
  * CRITICAL: This endpoint receives raw request body for HMAC verification

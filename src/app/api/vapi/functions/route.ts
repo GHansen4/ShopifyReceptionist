@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-// Removed unused import: SupabaseSessionStorage
-import { getShopContext } from '@/lib/shopify/context';
+import { supabaseAdmin } from '@/lib/supabase/client';
+import { getProducts, searchProducts } from '@/lib/shopify/admin-graphql';
+
+// Ensure Node.js runtime for this sensitive route
+export const runtime = 'nodejs';
+
+/**
+ * Get shop data by assistant ID from database
+ */
+async function getShopByAssistantId(assistantId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('shops')
+    .select('shop_domain, access_token')
+    .eq('vapi_assistant_id', assistantId)
+    .single();
+
+  if (error || !data) {
+    console.error('[getShopByAssistantId] Shop not found:', { assistantId, error });
+    return null;
+  }
+
+  return {
+    shopDomain: (data as any).shop_domain,
+    accessToken: (data as any).access_token
+  };
+}
 
 /**
  * Vapi Function Calling Endpoint
@@ -87,31 +111,36 @@ export async function POST(request: NextRequest) {
     console.log('[Vapi Functions] body?.name:', body?.name);
 
     // ======================================================================
-    // Get Shop Context (for Vapi calls, we need to determine shop differently)
+    // Resolve Shop via Assistant ID (Vapi calls)
     // ======================================================================
-    // Vapi calls don't have Shopify session headers, so we need to determine
-    // the shop from the assistant configuration or request context
-    let shopDomain: string;
+    // Extract assistant ID from the request body
+    const assistantId = body?.assistant?.id;
     
-    // Try to get shop from request headers first (if called from Shopify app)
-    const shopContext = getShopContext(request);
-    if (shopContext) {
-      shopDomain = shopContext.shop;
-      console.log(`[Vapi Functions] Shop from context: ${shopDomain}`);
-    } else {
-      // For Vapi calls, we need to determine the shop from the assistant
-      // We can get it from the function call parameters or use a fallback
-      const functionCall = body?.message?.functionCall || body?.functionCall || body?.function;
-      
-      if (functionCall?.parameters?.shop) {
-        shopDomain = functionCall.parameters.shop;
-        console.log(`[Vapi Functions] Shop from parameters: ${shopDomain}`);
-      } else {
-        // Fallback to default shop (this should be configured per assistant)
-        shopDomain = 'always-ai-dev-store.myshopify.com';
-        console.log(`[Vapi Functions] Using fallback shop: ${shopDomain}`);
-      }
+    if (!assistantId) {
+      console.error('[Vapi Functions] ❌ No assistant ID found in request');
+      return NextResponse.json({
+        results: [{
+          error: 'No assistant ID provided',
+        }],
+      }, { status: 400 });
     }
+
+    console.log(`[Vapi Functions] Assistant ID: ${assistantId}`);
+    
+    // Resolve shop from assistant ID
+    const shopData = await getShopByAssistantId(assistantId);
+    
+    if (!shopData) {
+      console.error('[Vapi Functions] ❌ No shop found for assistant:', assistantId);
+      return NextResponse.json({
+        results: [{
+          error: 'NO_OFFLINE_TOKEN_FOR_SHOP',
+          details: 'No offline token found for shop'
+        }],
+      }, { status: 401 });
+    }
+
+    console.log(`[Vapi Functions] Resolved shop: ${shopData.shopDomain}, offlineToken: ${!!shopData.accessToken}`);
 
     // ======================================================================
     // Process Function Call
@@ -212,13 +241,13 @@ export async function POST(request: NextRequest) {
       // Handle the function call
       if (name === 'get_products') {
         console.log('[Vapi Functions] Processing get_products function...');
-        const result = await handleGetProducts(shopDomain, parameters);
+        const result = await handleGetProducts(parameters, shopData);
         return NextResponse.json({
           results: [result],
         });
       } else if (name === 'search_products') {
         console.log('[Vapi Functions] Processing search_products function...');
-        const result = await handleSearchProducts(shopDomain, parameters);
+        const result = await handleSearchProducts(parameters, shopData);
         return NextResponse.json({
           results: [result],
         });
@@ -258,9 +287,9 @@ export async function POST(request: NextRequest) {
       // Process the function call
       let result;
       if (name === 'get_products') {
-        result = await handleGetProducts(parameters, shopDomain);
+        result = await handleGetProducts(parameters, shopData);
       } else if (name === 'search_products') {
-        result = await handleSearchProducts(parameters, shopDomain);
+        result = await handleSearchProducts(parameters, shopData);
       } else {
         result = {
           error: `Unknown function: ${name}`,
@@ -296,112 +325,35 @@ export async function POST(request: NextRequest) {
  * Get Products Handler
  * Fetches products from Shopify
  */
-async function handleGetProducts(parameters: any, shopDomain: string) {
+async function handleGetProducts(parameters: any, shopData: { shopDomain: string; accessToken: string }) {
   try {
     const limit = parameters?.limit || 5;
     
-    // CRITICAL FIX: Ensure shopDomain is a string, not an object
-    const shop = typeof shopDomain === 'string' ? shopDomain : 'always-ai-dev-store.myshopify.com';
-    
-    console.log(`[get_products] 🔍 DEBUG: shopDomain type: ${typeof shopDomain}`);
-    console.log(`[get_products] 🔍 DEBUG: shopDomain value:`, shopDomain);
-    console.log(`[get_products] 🔍 DEBUG: resolved shop: "${shop}"`);
+    console.log(`[get_products] Fetching ${limit} products for ${shopData.shopDomain}`);
 
-    console.log(`[get_products] Fetching ${limit} products for ${shop}`);
-
-    // Load Shopify session directly from shopify_sessions table
-    const { supabaseAdmin } = await import('@/lib/supabase/client');
-    
-    // DEBUG: Log the exact shop parameter being used
-    console.log(`[get_products] 🔍 DEBUG: Searching for shop: "${shop}"`);
-    console.log(`[get_products] 🔍 DEBUG: Shop type: ${typeof shop}, length: ${shop?.length}`);
-    
-    // Try the query with detailed logging
-    const { data: session, error: sessionError } = await supabaseAdmin
-      .from('shopify_sessions')
-      .select('*')
-      .eq('shop', shop)
-      .maybeSingle();
-
-    console.log(`[get_products] 🔍 DEBUG: Query result:`, {
-      hasSession: !!session,
-      sessionError: sessionError,
-      sessionShop: (session as any)?.shop || 'unknown',
-      sessionAccessToken: (session as any)?.access_token ? 'present' : 'missing'
+    // Use adminGraphQL with explicit credentials
+    const products = await getProducts({
+      shopDomain: shopData.shopDomain,
+      accessToken: shopData.accessToken,
+      limit
     });
 
-    if (sessionError) {
-      console.error(`[get_products] ❌ Database error:`, sessionError);
-      return {
-        error: 'Database error - session lookup failed',
-        details: sessionError.message
-      };
-    }
+    console.log(`[get_products] ✅ Fetched ${products.length} products via GraphQL`);
 
-    if (!session) {
-      console.error(`[get_products] ❌ No session found for shop: "${shop}"`);
-      
-      // DEBUG: Try to find any sessions to see what's in the database
-      const { data: allSessions, error: allSessionsError } = await supabaseAdmin
-        .from('shopify_sessions')
-        .select('shop, created_at')
-        .limit(5);
-      
-      console.log(`[get_products] 🔍 DEBUG: All sessions in database:`, {
-        allSessions,
-        allSessionsError,
-        totalSessions: allSessions?.length || 0
-      });
-      
-      return {
-        error: 'Store not authenticated - session not found',
-        debug: {
-          searchedFor: shop,
-          availableSessions: allSessions?.map((s: any) => s.shop) || []
-        }
-      };
-    }
-
-    if (!(session as any).access_token) {
-      console.error(`[get_products] ❌ No access token found in session`);
-      return {
-        error: 'No access token found',
-      };
-    }
-
-    // Type assertion to fix TypeScript inference issue
-    const sessionData = session as { shop: string; access_token: string };
-    console.log(`[get_products] ✅ Found session for ${sessionData.shop}`);
-
-    // Fetch products using GraphQL API
-    try {
-      const { getProducts } = await import('@/lib/shopify/graphql');
-      
-      // Create session object for GraphQL client
-      const graphqlSession = {
-        shop: sessionData.shop,
-        accessToken: sessionData.access_token,
-      };
-
-      console.log(`[get_products] 🔍 Fetching products via GraphQL (limit: ${limit})`);
-      const products = await getProducts(graphqlSession, limit);
-
-      console.log(`[get_products] ✅ Fetched ${products.length} products via GraphQL`);
-
-      // Format products for the AI
-      const formattedProducts = products.map((product) => ({
-        title: product.title,
-        description: 'Product available in store', // GraphQL doesn't include body_html by default
-        price: product.priceRange.minVariantPrice.amount,
-        currency: product.priceRange.minVariantPrice.currencyCode,
-        available: product.availableForSale,
-        handle: product.handle,
-        variants: product.variants.edges.map(edge => ({
-          title: edge.node.title,
-          price: edge.node.price.amount,
-          currency: edge.node.price.currencyCode,
-          available: edge.node.availableForSale
-        }))
+    // Format products for the AI
+    const formattedProducts = products.map((product) => ({
+      title: product.title,
+      description: 'Product available in store',
+      price: product.priceRange.minVariantPrice.amount,
+      currency: product.priceRange.minVariantPrice.currencyCode,
+      available: product.availableForSale,
+      handle: product.handle,
+      variants: product.variants.edges.map(edge => ({
+        title: edge.node.title,
+        price: edge.node.price.amount,
+        currency: edge.node.price.currencyCode,
+        available: edge.node.availableForSale
+      }))
     }));
 
     return {
@@ -409,22 +361,11 @@ async function handleGetProducts(parameters: any, shopDomain: string) {
       count: formattedProducts.length,
     };
 
-    } catch (graphqlError) {
-      console.error('[get_products] ❌ GraphQL error:', graphqlError);
-      return {
-        error: 'Failed to fetch products via GraphQL',
-        details: graphqlError instanceof Error ? graphqlError.message : 'Unknown GraphQL error',
-        debug: {
-          error: graphqlError instanceof Error ? graphqlError.message : 'Unknown error',
-          stack: graphqlError instanceof Error ? graphqlError.stack : undefined
-        }
-      };
-    }
-
   } catch (error: any) {
     console.error('[get_products] Error:', error);
     return {
       error: 'Failed to fetch products',
+      details: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 }
@@ -433,38 +374,25 @@ async function handleGetProducts(parameters: any, shopDomain: string) {
  * Search Products Handler
  * Searches products by keyword
  */
-async function handleSearchProducts(parameters: any, shopDomain: string) {
+async function handleSearchProducts(parameters: any, shopData: { shopDomain: string; accessToken: string }) {
   try {
     const query = parameters?.query || '';
     
-    // CRITICAL FIX: Ensure shopDomain is a string, not an object
-    const shop = typeof shopDomain === 'string' ? shopDomain : 'always-ai-dev-store.myshopify.com';
-    
-    console.log(`[search_products] 🔍 DEBUG: shopDomain type: ${typeof shopDomain}`);
-    console.log(`[search_products] 🔍 DEBUG: shopDomain value:`, shopDomain);
-    console.log(`[search_products] 🔍 DEBUG: resolved shop: "${shop}"`);
-
     if (!query) {
       return {
-        error: 'No search query provided',
+        error: 'Search query is required',
       };
     }
 
-    console.log(`[search_products] Searching for "${query}" in ${shop}`);
+    console.log(`[search_products] Searching for "${query}" in ${shopData.shopDomain}`);
 
-    // Load Shopify session directly from shopify_sessions table
-    const { supabaseAdmin } = await import('@/lib/supabase/client');
-    
-    // DEBUG: Log the exact shop parameter being used
-    console.log(`[search_products] 🔍 DEBUG: Searching for shop: "${shop}"`);
-    console.log(`[search_products] 🔍 DEBUG: Shop type: ${typeof shop}, length: ${shop?.length}`);
-    
-    // Try the query with detailed logging
-    const { data: session, error: sessionError } = await supabaseAdmin
-      .from('shopify_sessions')
-      .select('*')
-      .eq('shop', shop)
-      .maybeSingle();
+    // Use adminGraphQL with explicit credentials
+    const products = await searchProducts({
+      shopDomain: shopData.shopDomain,
+      accessToken: shopData.accessToken,
+      query,
+      limit: 5
+    });
 
     console.log(`[search_products] 🔍 DEBUG: Query result:`, {
       hasSession: !!session,

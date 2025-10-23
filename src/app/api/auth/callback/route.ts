@@ -3,6 +3,7 @@ import { shopify } from '@/lib/shopify/client';
 import { createErrorResponse } from '@/lib/utils/api';
 import { supabaseAdmin } from '@/lib/supabase/client';
 import { env } from '@/lib/env';
+import { normalizeShopDomain } from '@/lib/normalize';
 import crypto from 'crypto';
 
 // Force dynamic rendering (uses query params)
@@ -200,6 +201,10 @@ export async function GET(request: NextRequest) {
     // CRITICAL: Store shop metadata in shops table - OAuth MUST fail if this fails
     console.log('[OAuth Callback] Storing shop metadata in shops table...');
     
+    // Normalize shop domain for consistent storage
+    const normalizedShop = normalizeShopDomain(shop);
+    console.log(`[OAuth Callback] Normalized shop domain: ${normalizedShop}`);
+    
     let shopSaveSuccess = false;
     let lastError: any = null;
     
@@ -208,9 +213,9 @@ export async function GET(request: NextRequest) {
       const { error } = await supabaseAdmin
         .from('shops')
         .upsert({
-          shop_domain: shop,
-          shop_name: shop.replace('.myshopify.com', ''),
-          access_token: accessToken,
+          shop_domain: normalizedShop,
+          shop_name: normalizedShop.replace('.myshopify.com', ''),
+          access_token: accessToken, // This is the offline token
           installed_at: new Date().toISOString(),
           subscription_status: 'trial',
           plan_name: 'starter',

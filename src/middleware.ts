@@ -46,8 +46,7 @@ export function middleware(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const idToken = searchParams.get('id_token');
   const session = searchParams.get('session');
-  const shop = searchParams.get('shop');
-  const hasSessionParams = !!(idToken || session || shop);
+  const hasSessionParams = !!(idToken || session);
 
   // Allow request if it has either auth header OR session parameters
   if (hasAuthHeader || hasSessionParams) {

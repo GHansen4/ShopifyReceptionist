@@ -5,6 +5,9 @@ import { env } from '@/lib/env';
 // Force dynamic rendering (uses query params)
 export const dynamic = 'force-dynamic';
 
+// Ensure Node.js runtime for this sensitive route
+export const runtime = 'nodejs';
+
 /**
  * Fetch products from Shopify Admin API
  * 
