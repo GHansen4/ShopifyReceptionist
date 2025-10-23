@@ -130,11 +130,56 @@ export async function GET(request: NextRequest) {
     session.accessToken = accessToken;
     session.isOnline = false;
     
-    // Store session via our SupabaseSessionStorage
-    await shopify.config.sessionStorage.storeSession(session);
-
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[OAuth Callback] ✅ Session stored in Supabase');
+    // Store session via our SupabaseSessionStorage with proper error handling
+    try {
+      console.log('[OAuth Callback] Storing session in shopify_sessions table...');
+      const storeResult = await shopify.config.sessionStorage.storeSession(session);
+      
+      if (!storeResult) {
+        throw new Error('storeSession() returned false - session storage failed');
+      }
+      
+      console.log('[OAuth Callback] ✅ Session stored in shopify_sessions');
+      
+      // VERIFY IT ACTUALLY SAVED
+      console.log('[OAuth Callback] 🔍 Verifying session was saved to shopify_sessions...');
+      const { data: verifySession, error: verifyError } = await supabaseAdmin
+        .from('shopify_sessions')
+        .select('id, shop, access_token')
+        .eq('shop', shop)
+        .single();
+      
+      if (verifyError || !verifySession) {
+        console.error('[OAuth Callback] ❌ CRITICAL: Session verification failed:', verifyError);
+        throw new Error(`Session save verification failed: ${verifyError?.message || 'No session found'}`);
+      }
+      
+      console.log('[OAuth Callback] ✅ Session verification successful:', {
+        id: verifySession.id,
+        shop: verifySession.shop,
+        tokenPrefix: verifySession.access_token?.substring(0, 10),
+        tokenLength: verifySession.access_token?.length
+      });
+      
+    } catch (sessionError) {
+      console.error('[OAuth Callback] ❌ CRITICAL: Failed to store session in shopify_sessions:', sessionError);
+      console.error('[OAuth Callback] Session storage error details:', {
+        error: sessionError instanceof Error ? sessionError.message : 'Unknown error',
+        stack: sessionError instanceof Error ? sessionError.stack : undefined
+      });
+      
+      // OAuth MUST fail if session storage fails
+      return NextResponse.json(
+        {
+          error: 'OAuth installation incomplete - session storage failed',
+          details: {
+            shop,
+            error: sessionError instanceof Error ? sessionError.message : 'Unknown error',
+            hint: 'Session could not be stored in shopify_sessions table. Check database permissions and table schema.'
+          }
+        },
+        { status: 500 }
+      );
     }
 
     // CRITICAL: Store shop metadata in shops table - OAuth MUST fail if this fails

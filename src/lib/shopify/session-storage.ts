@@ -54,7 +54,15 @@ export class SupabaseSessionStorage implements SessionStorage {
         .upsert(sessionData, { onConflict: 'id' });
 
       if (error) {
-        console.error('[SessionStorage] Error storing session:', error);
+        console.error('[SessionStorage] ❌ Error storing session:', {
+          error: error.message,
+          code: error.code,
+          hint: error.hint,
+          details: error.details,
+          sessionId: session.id,
+          shop: session.shop,
+          tableName: this.tableName
+        });
         return false;
       }
 
