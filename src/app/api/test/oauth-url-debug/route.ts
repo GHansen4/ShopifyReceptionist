@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { env } from '@/lib/env';
 
+// Force dynamic rendering (uses environment variables and request data)
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   const requestId = Math.random().toString(36).substring(7);
   console.log(`[${requestId}] 🔍 OAUTH URL DEBUG: Checking OAuth URL configuration...`);

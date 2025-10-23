@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase/client';
 
+// Force dynamic rendering (uses database operations)
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   const requestId = Math.random().toString(36).substring(7);
   console.log(`[${requestId}] 🗑️ FORCE CLEAR TOKEN: Removing invalid token from database...`);
