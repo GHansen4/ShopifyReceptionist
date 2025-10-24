@@ -398,6 +398,33 @@ Enable detailed logging:
 DEBUG=* npm run dev
 ```
 
+## 🧪 Testing Instructions
+
+### ⚠️ IMPORTANT: Shopify-Compliant Testing
+
+**Our testing approach follows Shopify's official documentation (October 2025).**
+
+### Quick Start Testing
+
+1. **Install Shopify CLI** (Required)
+   ```bash
+   npm install -g @shopify/cli @shopify/theme
+   shopify auth login
+   ```
+
+2. **Start Shopify Development Server**
+   ```bash
+   shopify app dev
+   ```
+
+3. **Test in Shopify Admin**
+   - Shopify CLI will automatically open your app
+   - Test OAuth flow, voice AI, and core functionality
+
+### Detailed Testing Guide
+
+See [Shopify Testing Guide](docs/SHOPIFY_TESTING_GUIDE.md) for comprehensive Shopify-compliant testing instructions.
+
 ## Contributing
 
 1. Create a feature branch: `git checkout -b feature/your-feature`

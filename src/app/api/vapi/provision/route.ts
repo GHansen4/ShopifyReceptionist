@@ -111,11 +111,11 @@ export async function POST(request: NextRequest) {
       call_minutes_limit: 100,
       vapi_assistant_id: null,
       vapi_phone_number_id: null,
-      phone_number: null,
+      provisioned_phone_number: null,
       settings: {},
       email: null,
       timezone: 'UTC',
-      phone_number: null,
+      provisioned_phone_number: null,
       updated_at: session.updated_at,
       created_at: session.created_at
     };
@@ -123,11 +123,11 @@ export async function POST(request: NextRequest) {
     console.log(`[${requestId}] Found shop: ${shop.shop_name || shop.shop_domain}`);
 
     // Check if already provisioned
-    if (shop.vapi_assistant_id && shop.phone_number) {
-      console.log(`[${requestId}] ⚠️ Shop already provisioned with phone: ${shop.phone_number}`);
+    if (shop.vapi_assistant_id && shop.provisioned_phone_number) {
+      console.log(`[${requestId}] ⚠️ Shop already provisioned with phone: ${shop.provisioned_phone_number}`);
       return createSuccessResponse({
         status: 'already_provisioned',
-        phoneNumber: shop.phone_number as string,
+        phoneNumber: shop.provisioned_phone_number as string,
         assistantId: shop.vapi_assistant_id as string,
         message: 'AI Receptionist already configured',
       });
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
       .from('shops')
       .update({
         vapi_assistant_id: provisioningResult.assistantId,
-        phone_number: provisioningResult.phoneNumber,
+        provisioned_phone_number: provisioningResult.phoneNumber,
         vapi_phone_number_id: provisioningResult.phoneNumber, // Store for reference
         settings: {
           ...shop.settings,
@@ -295,7 +295,7 @@ export async function GET(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: session, error } = await (supabase as any)
       .from('shopify_sessions')
-      .select('id, shop, vapi_assistant_id, phone_number')
+      .select('id, shop, vapi_assistant_id, provisioned_phone_number')
       .eq('shop', shopContext.shop)
       .single();
 
