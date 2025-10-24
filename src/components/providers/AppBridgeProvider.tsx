@@ -10,12 +10,11 @@ interface AppBridgeProviderWrapperProps {
 
 /**
  * App Bridge v4+ Implementation for Embedded Apps
- * Handles cookie consent and proper embedded mode initialization
+ * Follows Shopify best practices for embedded app initialization
  */
 function AppBridgeContent({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
   const [appBridgeReady, setAppBridgeReady] = useState(false);
-  const [needsCookieConsent, setNeedsCookieConsent] = useState(false);
   
   // Extract Shopify parameters from URL
   const host = searchParams.get('host');
@@ -69,39 +68,9 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
     console.log('[DEBUG] === End Debug ===');
   }
   
-  // Handle cookie consent for embedded apps - RELAXED LOGIC
-  useEffect(() => {
-    if (isActuallyEmbedded && typeof window !== 'undefined') {
-      // More lenient cookie detection - only show consent if absolutely necessary
-      const hasCookies = document.cookie.length > 0;
-      const hasSessionStorage = window.sessionStorage && window.sessionStorage.length > 0;
-      const hasLocalStorage = window.localStorage && window.localStorage.length > 0;
-      
-      console.log('[AppBridge] Cookie check:', {
-        hasCookies,
-        hasSessionStorage,
-        hasLocalStorage,
-        cookieString: document.cookie,
-        userAgent: navigator.userAgent
-      });
-      
-      // Only show cookie consent if we're truly in an embedded context AND have no storage at all
-      // AND we're not in a development environment
-      const isStrictEmbedded = isEmbedded && !isEmbeddedParam; // Only iframe, not URL param
-      const hasNoStorage = !hasCookies && !hasSessionStorage && !hasLocalStorage;
-      const isProduction = process.env.NODE_ENV === 'production';
-      
-      if (isStrictEmbedded && hasNoStorage && isProduction) {
-        console.log('[AppBridge] Strict embedded mode with no storage - may need consent');
-        setNeedsCookieConsent(true);
-      } else {
-        console.log('[AppBridge] Cookie consent not needed - proceeding with App Bridge');
-        setNeedsCookieConsent(false);
-      }
-    }
-  }, [isActuallyEmbedded, isEmbedded, isEmbeddedParam]);
+  // App Bridge handles cookie management automatically - no custom logic needed
   
-  // Initialize App Bridge v4+ using createApp pattern - RELAXED APPROACH
+  // Initialize App Bridge v4+ using createApp pattern - SHOPIFY BEST PRACTICES
   useEffect(() => {
     if (isActuallyEmbedded && finalHost && apiKey) {
       console.log('[AppBridge] Initializing App Bridge v4+ with createApp pattern');
@@ -121,19 +90,14 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
           }
           
           setAppBridgeReady(true);
-          setNeedsCookieConsent(false); // Clear cookie consent if App Bridge works
           console.log('[AppBridge] ✅ App Bridge v4+ initialized successfully');
         } catch (error) {
           console.error('[AppBridge] ❌ Failed to initialize App Bridge:', error);
-          // Only set cookie consent if it's a real error, not just missing cookies
-          if (error.message && error.message.includes('cookie')) {
-            setNeedsCookieConsent(true);
-          }
+          // Let App Bridge handle its own error recovery
         }
       }).catch((error) => {
         console.error('[AppBridge] ❌ Failed to import App Bridge:', error);
-        // Only set cookie consent for import errors
-        setNeedsCookieConsent(true);
+        // Let App Bridge handle its own error recovery
       });
     } else {
       // Log why App Bridge wasn't initialized
@@ -155,46 +119,7 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
     console.log('[AppBridge] Shop:', shop || 'not provided');
     console.log('[AppBridge] Host:', finalHost ? 'present' : 'missing');
     console.log('[AppBridge] API Key:', apiKey ? 'configured' : 'MISSING - Set NEXT_PUBLIC_SHOPIFY_API_KEY');
-    console.log('[AppBridge] Cookie consent needed:', needsCookieConsent);
     console.log('[AppBridge] App Bridge ready:', appBridgeReady);
-  }
-  
-  // Show cookie consent page only if absolutely necessary
-  if (needsCookieConsent && isActuallyEmbedded && process.env.NODE_ENV === 'production') {
-    return (
-      <div style={{ 
-        padding: '20px', 
-        textAlign: 'center',
-        fontFamily: 'system-ui, -apple-system, sans-serif'
-      }}>
-        <h2>Cookie Consent Required</h2>
-        <p>This app requires cookies to function properly in embedded mode.</p>
-        <button 
-          onClick={() => {
-            // Try to enable cookies and reload
-            window.location.reload();
-          }}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#0070f3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Enable Cookies & Reload
-        </button>
-        <p style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
-          If this doesn't work, try opening the app in a new tab or different browser.
-        </p>
-      </div>
-    );
-  }
-
-  // In development or if cookie consent is not needed, proceed with app
-  if (process.env.NODE_ENV === 'development' && needsCookieConsent) {
-    console.log('[AppBridge] Development mode - bypassing cookie consent');
   }
   
   return <>{children}</>;
@@ -208,10 +133,13 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
  * - Proper iframe embedding in Shopify Admin
  * - Session token authentication
  * - App Bridge features (navigation, toasts, etc.)
+ * - Automatic cookie management (no custom logic needed)
  * 
  * Requirements:
  * - NEXT_PUBLIC_SHOPIFY_API_KEY must be set in environment variables
  * - host parameter must be in URL when embedded
+ * 
+ * Follows Shopify best practices for embedded apps
  */
 export const AppBridgeProviderWrapper: FC<AppBridgeProviderWrapperProps> = ({ children }) => {
   return (
