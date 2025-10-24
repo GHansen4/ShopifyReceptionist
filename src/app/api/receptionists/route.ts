@@ -1,23 +1,23 @@
 import { NextRequest } from 'next/server';
-import { getShopContext } from '@/lib/shopify/context';
+import { shopify } from '@/lib/shopify/client';
 import { createSuccessResponse, createErrorResponse } from '@/lib/utils/api';
 import { AuthenticationError } from '@/lib/utils/errors';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get shop context (validated by middleware)
-    const shopContext = getShopContext(request);
+    // Use Shopify's official authentication pattern
+    const { session } = await shopify.authenticate.admin(request);
 
-    if (!shopContext) {
+    if (!session) {
       return createErrorResponse(new AuthenticationError('Not authenticated'));
     }
 
-    // This is a protected route - middleware has already validated the session token
-    // shopContext contains: shop domain, session token, and user ID
+    // This is a protected route - Shopify has validated the session
+    // session contains: shop, accessToken, isOnline, etc.
 
     return createSuccessResponse({
       message: 'Protected endpoint accessed successfully',
-      shop: shopContext.shop,
+      shop: session.shop,
       receptionists: [], // TODO: Fetch receptionists from database for this shop
     });
   } catch (error) {
@@ -27,9 +27,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const shopContext = getShopContext(request);
+    // Use Shopify's official authentication pattern
+    const { session } = await shopify.authenticate.admin(request);
 
-    if (!shopContext) {
+    if (!session) {
       return createErrorResponse(new AuthenticationError('Not authenticated'));
     }
 
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     return createSuccessResponse(
       {
         message: 'Receptionist created',
-        shop: shopContext.shop,
+        shop: session.shop,
       },
       201
     );
