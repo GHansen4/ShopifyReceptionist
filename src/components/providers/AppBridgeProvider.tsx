@@ -69,10 +69,10 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
     console.log('[DEBUG] === End Debug ===');
   }
   
-  // Handle cookie consent for embedded apps
+  // Handle cookie consent for embedded apps - RELAXED LOGIC
   useEffect(() => {
     if (isActuallyEmbedded && typeof window !== 'undefined') {
-      // Check if we need to handle cookie consent
+      // More lenient cookie detection - only show consent if absolutely necessary
       const hasCookies = document.cookie.length > 0;
       const hasSessionStorage = window.sessionStorage && window.sessionStorage.length > 0;
       const hasLocalStorage = window.localStorage && window.localStorage.length > 0;
@@ -81,20 +81,29 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
         hasCookies,
         hasSessionStorage,
         hasLocalStorage,
-        cookieString: document.cookie
+        cookieString: document.cookie,
+        userAgent: navigator.userAgent
       });
       
-      // If we're embedded but have no cookies/session, we might need consent
-      if (!hasCookies && !hasSessionStorage) {
-        console.log('[AppBridge] No cookies/session detected in embedded mode');
+      // Only show cookie consent if we're truly in an embedded context AND have no storage at all
+      // AND we're not in a development environment
+      const isStrictEmbedded = isEmbedded && !isEmbeddedParam; // Only iframe, not URL param
+      const hasNoStorage = !hasCookies && !hasSessionStorage && !hasLocalStorage;
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      if (isStrictEmbedded && hasNoStorage && isProduction) {
+        console.log('[AppBridge] Strict embedded mode with no storage - may need consent');
         setNeedsCookieConsent(true);
+      } else {
+        console.log('[AppBridge] Cookie consent not needed - proceeding with App Bridge');
+        setNeedsCookieConsent(false);
       }
     }
-  }, [isActuallyEmbedded]);
+  }, [isActuallyEmbedded, isEmbedded, isEmbeddedParam]);
   
-  // Initialize App Bridge v4+ using createApp pattern
+  // Initialize App Bridge v4+ using createApp pattern - RELAXED APPROACH
   useEffect(() => {
-    if (isActuallyEmbedded && finalHost && apiKey && !needsCookieConsent) {
+    if (isActuallyEmbedded && finalHost && apiKey) {
       console.log('[AppBridge] Initializing App Bridge v4+ with createApp pattern');
       
       // Dynamically import App Bridge to avoid SSR issues
@@ -112,14 +121,18 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
           }
           
           setAppBridgeReady(true);
+          setNeedsCookieConsent(false); // Clear cookie consent if App Bridge works
           console.log('[AppBridge] ✅ App Bridge v4+ initialized successfully');
         } catch (error) {
           console.error('[AppBridge] ❌ Failed to initialize App Bridge:', error);
-          // If App Bridge fails, we might need cookie consent
-          setNeedsCookieConsent(true);
+          // Only set cookie consent if it's a real error, not just missing cookies
+          if (error.message && error.message.includes('cookie')) {
+            setNeedsCookieConsent(true);
+          }
         }
       }).catch((error) => {
         console.error('[AppBridge] ❌ Failed to import App Bridge:', error);
+        // Only set cookie consent for import errors
         setNeedsCookieConsent(true);
       });
     } else {
@@ -131,12 +144,10 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
           console.warn('[AppBridge] ⚠️ Embedded but missing host parameter');
         } else if (!apiKey) {
           console.error('[AppBridge] ❌ Missing NEXT_PUBLIC_SHOPIFY_API_KEY environment variable');
-        } else if (needsCookieConsent) {
-          console.log('[AppBridge] ⚠️ Cookie consent needed');
         }
       }
     }
-  }, [isActuallyEmbedded, finalHost, apiKey, needsCookieConsent]);
+  }, [isActuallyEmbedded, finalHost, apiKey]);
   
   // Log initialization status
   if (process.env.NODE_ENV === 'development' && isActuallyEmbedded) {
@@ -148,8 +159,8 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
     console.log('[AppBridge] App Bridge ready:', appBridgeReady);
   }
   
-  // Show cookie consent page if needed
-  if (needsCookieConsent && isActuallyEmbedded) {
+  // Show cookie consent page only if absolutely necessary
+  if (needsCookieConsent && isActuallyEmbedded && process.env.NODE_ENV === 'production') {
     return (
       <div style={{ 
         padding: '20px', 
@@ -179,6 +190,11 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
         </p>
       </div>
     );
+  }
+
+  // In development or if cookie consent is not needed, proceed with app
+  if (process.env.NODE_ENV === 'development' && needsCookieConsent) {
+    console.log('[AppBridge] Development mode - bypassing cookie consent');
   }
   
   return <>{children}</>;
