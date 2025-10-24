@@ -238,7 +238,8 @@ export async function GET(request: NextRequest) {
         .upsert({
           shop_domain: normalizedShop,
           shop_name: normalizedShop.replace('.myshopify.com', ''),
-          access_token_offline: accessToken, // Store as offline token for Vapi calls
+          access_token: accessToken, // Store in the required access_token column
+          access_token_offline: accessToken, // Also store as offline token for Vapi calls
           installed_at: new Date().toISOString(),
           subscription_status: 'trial',
           plan_name: 'starter',
@@ -297,7 +298,8 @@ export async function GET(request: NextRequest) {
           .upsert({
             shop_domain: normalizedShop,
             shop_name: normalizedShop.replace('.myshopify.com', ''),
-            access_token_offline: accessToken, // Store as offline token for Vapi calls
+            access_token: accessToken, // Store in the required access_token column
+            access_token_offline: accessToken, // Also store as offline token for Vapi calls
             installed_at: new Date().toISOString(),
             subscription_status: 'trial',
             plan_name: 'starter',
