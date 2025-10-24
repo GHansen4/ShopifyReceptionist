@@ -1,5 +1,7 @@
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 /**
  * Shop-Specific Vapi Function Calling Endpoint
@@ -22,6 +24,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { shopId: string } }
 ) {
+  const supabase = getServerSupabase();
   const isDev = process.env.NODE_ENV === 'development';
   const { shopId } = params;
   
@@ -66,33 +69,24 @@ export async function POST(
     // Get shop data from database
     const { data: shop, error: shopError } = await supabase
       .from('shops')
-      .select('*')
+      .select('id, shop_domain, access_token_offline, access_token, vapi_assistant_id')
       .eq('id', shopId)
-      .single();
+      .maybeSingle();
 
-    if (shopError || !shop) {
-      console.error('[Vapi Functions] ❌ Shop not found:', shopError);
-      return NextResponse.json({
-        results: [{
-          error: 'Shop not found',
-        }],
-      }, { status: 404 });
+    if (shopError) {
+      console.error('[SR shops read] error', shopError);
+      return NextResponse.json({ ok: false, error: 'SHOP_READ_FAILED' }, { status: 500 });
     }
 
-    // Get access token from shopify_sessions table
-    const { data: session, error: sessionError } = await supabase
-      .from('shopify_sessions')
-      .select('access_token')
-      .eq('shop', shop.shop_domain)
-      .single();
+    if (!shop) {
+      return NextResponse.json({ ok: false, error: 'SHOP_NOT_FOUND' }, { status: 404 });
+    }
 
-    if (sessionError || !session?.access_token) {
-      console.error('[Vapi Functions] ❌ No access token found for shop:', sessionError);
-      return NextResponse.json({
-        results: [{
-          error: 'Shop not authenticated',
-        }],
-      }, { status: 401 });
+    // Prefer offline token; fallback to legacy access_token
+    const adminToken = shop.access_token_offline ?? shop.access_token;
+    if (!adminToken) {
+      console.warn('[Vapi Functions] Missing admin token for shop', shop.shop_domain);
+      return NextResponse.json({ ok: false, error: 'MISSING_OFFLINE_TOKEN' }, { status: 401 });
     }
 
     console.log(`[Vapi Functions] ✅ Found access token for shop: ${shop.shop_domain}`);
@@ -132,11 +126,11 @@ export async function POST(
     
     switch (name) {
       case 'get_products':
-        result = await handleGetProducts(parameters, shop.shop_domain, session.access_token);
+        result = await handleGetProducts(parameters, shop.shop_domain, adminToken);
         break;
       
       case 'search_products':
-        result = await handleSearchProducts(parameters, shop.shop_domain, session.access_token);
+        result = await handleSearchProducts(parameters, shop.shop_domain, adminToken);
         break;
       
       default:

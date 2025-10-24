@@ -1,7 +1,11 @@
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase/client';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 export async function GET(request: NextRequest) {
+  const supabase = getServerSupabase();
+  
   try {
     console.log('[Test Shops] Fetching all shops from database...');
     

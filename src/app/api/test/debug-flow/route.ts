@@ -1,8 +1,11 @@
+export const runtime = 'nodejs';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getShopContext } from '@/lib/shopify/context';
-import { supabase } from '@/lib/supabase/client';
+import { getServerSupabase } from '@/lib/supabaseServer';
 
 export async function GET(request: NextRequest) {
+  const supabase = getServerSupabase();
   const requestId = Math.random().toString(36).substring(7);
   
   try {
