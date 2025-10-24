@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateSession } from '@/lib/shopify/session-validator';
 
 // Routes that don't require session token validation
 const publicRoutes = [
@@ -18,15 +19,12 @@ const publicPages = [
 ];
 
 /**
- * Middleware for Shopify embedded app authentication
+ * Enhanced Middleware for Shopify embedded app authentication
  * 
- * For embedded apps, authentication can come from:
- * 1. URL parameters (id_token, session) - for page loads in iframe
- * 2. Authorization header (Bearer token) - for API calls
- * 
- * We validate the presence of auth, actual validation happens in route handlers
+ * Uses official Shopify session validation instead of basic token presence checks.
+ * This provides proper security validation for all API routes.
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Skip validation for public routes
@@ -44,48 +42,45 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // For API routes, check for authentication
-  // Shopify provides session tokens via:
-  // 1. Authorization header: "Bearer <session-token>"
-  // 2. URL query params: ?id_token=<jwt>&session=<session-id>
-  
-  const authHeader = request.headers.get('authorization');
-  const hasAuthHeader = authHeader?.startsWith('Bearer ');
-  
-  // Check URL parameters for Shopify session info
-  const searchParams = request.nextUrl.searchParams;
-  const idToken = searchParams.get('id_token');
-  const session = searchParams.get('session');
-  const hasSessionParams = !!(idToken || session);
-
-  // Allow request if it has either auth header OR session parameters
-  if (hasAuthHeader || hasSessionParams) {
-    // Add debug logging in development
+  // For API routes, validate session using official Shopify methods
+  try {
+    const session = await validateSession(request);
+    
+    // Add session to request headers for downstream use
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-shopify-session', JSON.stringify(session));
+    
     if (process.env.NODE_ENV === 'development') {
-      const authMethod = hasAuthHeader ? 'Authorization header' : 'URL parameters';
-      console.log(`[Middleware] ${pathname} - Authenticated via ${authMethod}`);
+      console.log(`[Middleware] ${pathname} - Session validated successfully`);
+      console.log(`[Middleware] Shop: ${session.shop}`);
     }
     
-    return NextResponse.next();
-  }
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders
+      }
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`[Middleware] ${pathname} - Session validation failed:`, errorMessage);
+    }
 
-  // No valid authentication found
-  if (process.env.NODE_ENV === 'development') {
-    console.warn(`[Middleware] ${pathname} - No authentication found`);
-  }
-
-  return NextResponse.json(
-    {
-      success: false,
-      error: {
-        code: 'MISSING_AUTHENTICATION',
-        message: 'Missing authentication. Provide either Authorization header or Shopify session parameters.',
-        statusCode: 401,
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'INVALID_SESSION',
+          message: 'Invalid or expired session. Please re-authenticate.',
+          details: errorMessage,
+          statusCode: 401,
+        },
+        timestamp: new Date().toISOString(),
       },
-      timestamp: new Date().toISOString(),
-    },
-    { status: 401 }
-  );
+      { status: 401 }
+    );
+  }
 }
 
 export const config = {

@@ -3,22 +3,17 @@ import { shopify } from '@/lib/shopify/client';
 import { createErrorResponse } from '@/lib/utils/api';
 import { ValidationError } from '@/lib/utils/errors';
 import { withAuthRateLimit } from '@/lib/rate-limiter-middleware';
-import { env } from '@/lib/env';
-import crypto from 'crypto';
 
 /**
- * OAuth Initiation Route - Manual OAuth for Next.js App Router Compatibility
+ * OAuth Initiation Route - Official Shopify OAuth Implementation
  * 
- * We construct the OAuth URL manually because shopify.auth.begin() requires
- * Node.js native request/response objects which aren't available in Next.js App Router.
- * 
- * The session will still be stored in SupabaseSessionStorage when callback happens.
+ * Uses Shopify's official auth.begin() method for secure OAuth flow.
+ * This replaces the manual OAuth implementation with Shopify's built-in security.
  * 
  * GET /api/auth?shop=<shop-domain>
  */
 export async function GET(request: NextRequest) {
-  // 🚨🚨🚨 VERY OBVIOUS LOGGING TO PROVE OAUTH INITIATION 🚨🚨🚨
-  console.log('🚨🚨🚨 OAUTH INITIATION STARTED 🚨🚨🚨');
+  console.log('🚨🚨🚨 OAUTH INITIATION STARTED (OFFICIAL) 🚨🚨🚨');
   console.log('URL:', request.url);
   console.log('Search params:', request.nextUrl.searchParams.toString());
   
@@ -31,7 +26,7 @@ export async function GET(request: NextRequest) {
 
       if (process.env.NODE_ENV === 'development') {
         console.log('[OAuth] ═══════════════════════════════════════════════════════');
-        console.log('[OAuth] Initiating OAuth flow for shop:', shop);
+        console.log('[OAuth] Initiating OFFICIAL OAuth flow for shop:', shop);
       }
 
       if (!shop) {
@@ -43,58 +38,26 @@ export async function GET(request: NextRequest) {
 
       // Normalize shop domain
       const shopDomain = shop.replace('https://', '').replace('http://', '');
-      
-      // Generate OAuth state for CSRF protection
-      const state = crypto.randomBytes(32).toString('hex');
-      const nonce = crypto.randomBytes(16).toString('hex');
 
       if (process.env.NODE_ENV === 'development') {
-        console.log('[OAuth] Generated state:', state.substring(0, 10) + '...');
-        console.log('[OAuth] Generated nonce:', nonce.substring(0, 10) + '...');
+        console.log('[OAuth] Using official Shopify OAuth flow');
+        console.log('[OAuth] Shop domain:', shopDomain);
       }
 
-      // Store state in session storage via Shopify's session system
-      // We'll create a temporary session to hold the OAuth state
-      const tempSessionId = `offline_${shopDomain}`;
-      await shopify.session.customAppSession(shopDomain);
-
-      // Construct OAuth authorization URL manually
-      const redirectUri = `${env.SHOPIFY_APP_URL}/api/auth/callback`;
-      const scopes = env.SHOPIFY_SCOPES;
-      
-      const authUrl = new URL(`https://${shopDomain}/admin/oauth/authorize`);
-      authUrl.searchParams.set('client_id', env.SHOPIFY_API_KEY);
-      authUrl.searchParams.set('scope', scopes);
-      authUrl.searchParams.set('redirect_uri', redirectUri);
-      authUrl.searchParams.set('state', state);
-      authUrl.searchParams.set('grant_options[]', 'per-user');
+      // Use official Shopify OAuth flow - SECURE APPROACH
+      const authUrl = await shopify.auth.begin({
+        shop: shopDomain,
+        callbackPath: '/api/auth/callback',
+        isOnline: false
+      });
 
       if (process.env.NODE_ENV === 'development') {
-        console.log('[OAuth] Redirect URI:', redirectUri);
-        console.log('[OAuth] Scopes:', scopes);
-        console.log('[OAuth] Authorization URL generated');
-        console.log('[OAuth] ✅ Redirecting to Shopify');
+        console.log('[OAuth] ✅ Official OAuth URL generated');
+        console.log('[OAuth] ✅ Redirecting to Shopify (SECURE)');
         console.log('[OAuth] ═══════════════════════════════════════════════════════');
       }
 
-      // Store state in cookies as backup
-      const response = NextResponse.redirect(authUrl.toString());
-      response.cookies.set('shopify_oauth_state', state, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 600, // 10 minutes
-        path: '/',
-      });
-      response.cookies.set('shopify_oauth_shop', shopDomain, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 600,
-        path: '/',
-      });
-
-      return response;
+      return NextResponse.redirect(authUrl);
 
     } catch (error) {
       console.error('[OAuth] Unexpected error during auth initiation:', error);
