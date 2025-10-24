@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SupabaseSessionStorage } from '@/lib/shopify/session-storage';
-import { env } from '@/lib/env';
+import { shopify } from '@/lib/shopify/client';
+import { createErrorResponse } from '@/lib/utils/api';
+import { ValidationError } from '@/lib/utils/errors';
 
 // Force dynamic rendering (uses query params)
 export const dynamic = 'force-dynamic';
@@ -9,79 +10,35 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * Fetch products from Shopify Admin API
+ * Fetch products from Shopify Admin API - SHOPIFY OFFICIAL PATTERN
  * 
- * Manually retrieves session from Supabase and makes authenticated API calls.
- * This approach works reliably with Next.js App Router.
+ * Uses Shopify's official authentication and API patterns.
+ * This follows Shopify's prescribed approach for embedded apps.
  * 
- * GET /api/shopify/products?shop=<shop-domain>&limit=5
+ * GET /api/shopify/products?limit=5
  */
 export async function GET(request: NextRequest) {
   const isDev = process.env.NODE_ENV === 'development';
   
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const shop = searchParams.get('shop');
-    const limit = searchParams.get('limit') || '5';
+    // Use Shopify's official authentication pattern
+    const { session } = await shopify.authenticate.admin(request);
 
-    if (!shop) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Missing shop parameter',
-        },
-        { status: 400 }
-      );
+    if (!session) {
+      return createErrorResponse(new ValidationError('Not authenticated'));
     }
+
+    const searchParams = request.nextUrl.searchParams;
+    const limit = searchParams.get('limit') || '5';
 
     if (isDev) {
       console.log('[Shopify Products] ═══════════════════════════════════════════════════════');
-      console.log('[Shopify Products] Fetching products for shop:', shop);
+      console.log('[Shopify Products] Fetching products for shop:', session.shop);
       console.log('[Shopify Products] Limit:', limit);
     }
 
-    // Load session from Supabase
-    const sessionStorage = new SupabaseSessionStorage();
-    const sessions = await sessionStorage.findSessionsByShop(shop);
-
-    if (!sessions || sessions.length === 0) {
-      if (isDev) {
-        console.log('[Shopify Products] ❌ No session found for shop');
-      }
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Not authenticated - please complete OAuth flow first',
-          hint: `Visit /api/auth?shop=${shop}`,
-        },
-        { status: 401 }
-      );
-    }
-
-    const session = sessions[0]; // Get the first (most recent) session
-
-    if (!session.accessToken) {
-      if (isDev) {
-        console.log('[Shopify Products] ❌ Session has no access token');
-      }
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid session - no access token found',
-          hint: 'Re-authenticate via /api/auth',
-        },
-        { status: 401 }
-      );
-    }
-
-    if (isDev) {
-      console.log('[Shopify Products] ✅ Session loaded');
-      console.log('[Shopify Products] Session ID:', session.id);
-      console.log('[Shopify Products] Access token:', session.accessToken.substring(0, 10) + '...');
-    }
-
     // Make authenticated request to Shopify REST API
-    const apiUrl = `https://${shop}/admin/api/2024-10/products.json?limit=${limit}`;
+    const apiUrl = `https://${session.shop}/admin/api/2024-10/products.json?limit=${limit}`;
     
     const response = await fetch(apiUrl, {
       method: 'GET',

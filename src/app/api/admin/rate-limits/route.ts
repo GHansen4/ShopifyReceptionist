@@ -1,18 +1,20 @@
 import { NextRequest } from 'next/server';
+import { shopify } from '@/lib/shopify/client';
 import { createSuccessResponse, createErrorResponse } from '@/lib/utils/api';
 import { AuthenticationError } from '@/lib/utils/errors';
 import { getMetrics } from '@/lib/rate-limiter';
 
 /**
- * Admin endpoint for rate limit metrics
+ * Admin endpoint for rate limit metrics - SHOPIFY OFFICIAL PATTERN
  * GET /api/admin/rate-limits
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify admin access (this is a simplified check)
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return createErrorResponse(new AuthenticationError('Admin access required'));
+    // Use Shopify's official authentication pattern
+    const { session } = await shopify.authenticate.admin(request);
+
+    if (!session) {
+      return createErrorResponse(new AuthenticationError('Not authenticated'));
     }
 
     const metrics = getMetrics();
