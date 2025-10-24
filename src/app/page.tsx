@@ -18,12 +18,14 @@ export default function Home() {
   const host = searchParams.get('host');
   const idToken = searchParams.get('id_token');
   const session = searchParams.get('session');
+  const bounce = searchParams.get('bounce');
   
   // 🚨🚨🚨 VERY OBVIOUS LOGGING TO PROVE APP IS ACCESSED 🚨🚨🚨
   console.log('🚨🚨🚨 APP PAGE LOADED 🚨🚨🚨');
   console.log('Shop:', shop);
   console.log('Embedded:', embedded);
   console.log('Host:', host);
+  console.log('Bounce:', bounce);
   console.log('ID Token present:', !!idToken);
   console.log('Session present:', !!session);
   
@@ -73,13 +75,27 @@ export default function Home() {
   useEffect(() => {
     // Detect if we're in an iframe (embedded in Shopify Admin)
     const inIframe = window.self !== window.top;
-    setIsEmbedded(inIframe || embedded === '1');
+    const isEmbeddedParam = embedded === '1';
+    const isActuallyEmbedded = inIframe || isEmbeddedParam;
+    setIsEmbedded(isActuallyEmbedded);
 
     // If we have a shop parameter but NO session parameters (id_token, etc.)
     // we need to authenticate
     const hasSessionParams = idToken || session;
     
-    if (shop && !hasSessionParams && !inIframe) {
+    // If we came from bounce page, we might need to handle cookie consent differently
+    if (bounce === '1' && isActuallyEmbedded) {
+      console.log('[Auth] Came from bounce page, checking cookie consent');
+      // Give the app a moment to initialize cookies
+      setTimeout(() => {
+        if (!hasSessionParams) {
+          setNeedsAuth(true);
+          console.log('[Auth] Still no session after bounce, redirecting to auth');
+          const authUrl = `/api/auth?shop=${encodeURIComponent(shop!)}`;
+          window.top!.location.href = authUrl;
+        }
+      }, 2000);
+    } else if (shop && !hasSessionParams && !inIframe) {
       // NOT in iframe and need auth - safe to redirect
       setNeedsAuth(true);
       window.location.href = `/api/auth?shop=${encodeURIComponent(shop)}`;
@@ -91,7 +107,7 @@ export default function Home() {
       const authUrl = `/api/auth?shop=${encodeURIComponent(shop)}`;
       window.top!.location.href = authUrl;
     }
-  }, [shop, embedded, idToken, session, searchParams]);
+  }, [shop, embedded, idToken, session, searchParams, bounce]);
 
   // Calculate overall system health
   const allSystemsOperational = Object.values(systemStatus).every(status => status);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { type FC, type ReactNode, Suspense, useEffect } from 'react';
+import React, { type FC, type ReactNode, Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { isProductionEnvironment } from '@/lib/utils/url';
 
@@ -9,15 +9,18 @@ interface AppBridgeProviderWrapperProps {
 }
 
 /**
- * App Bridge v4+ Implementation
- * Uses the new createApp pattern instead of Provider/AppProvider
+ * App Bridge v4+ Implementation for Embedded Apps
+ * Handles cookie consent and proper embedded mode initialization
  */
 function AppBridgeContent({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
+  const [appBridgeReady, setAppBridgeReady] = useState(false);
+  const [needsCookieConsent, setNeedsCookieConsent] = useState(false);
   
   // Extract Shopify parameters from URL
   const host = searchParams.get('host');
   const shop = searchParams.get('shop');
+  const embedded = searchParams.get('embedded');
   
   // Also try to get host from window.location as fallback
   const windowHost = typeof window !== 'undefined' 
@@ -28,6 +31,8 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
   
   // Check if we're in embedded context
   const isEmbedded = typeof window !== 'undefined' && window.self !== window.top;
+  const isEmbeddedParam = embedded === '1';
+  const isActuallyEmbedded = isEmbedded || isEmbeddedParam;
   
   // Get API key from environment
   const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
@@ -58,13 +63,38 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
     console.log('[DEBUG] Host from searchParams:', host);
     console.log('[DEBUG] Host from window.location:', windowHost);
     console.log('[DEBUG] Final host:', finalHost);
-    console.log('[DEBUG] Is embedded:', isEmbedded);
+    console.log('[DEBUG] Is embedded (window):', isEmbedded);
+    console.log('[DEBUG] Is embedded (param):', isEmbeddedParam);
+    console.log('[DEBUG] Is actually embedded:', isActuallyEmbedded);
     console.log('[DEBUG] === End Debug ===');
   }
   
+  // Handle cookie consent for embedded apps
+  useEffect(() => {
+    if (isActuallyEmbedded && typeof window !== 'undefined') {
+      // Check if we need to handle cookie consent
+      const hasCookies = document.cookie.length > 0;
+      const hasSessionStorage = window.sessionStorage && window.sessionStorage.length > 0;
+      const hasLocalStorage = window.localStorage && window.localStorage.length > 0;
+      
+      console.log('[AppBridge] Cookie check:', {
+        hasCookies,
+        hasSessionStorage,
+        hasLocalStorage,
+        cookieString: document.cookie
+      });
+      
+      // If we're embedded but have no cookies/session, we might need consent
+      if (!hasCookies && !hasSessionStorage) {
+        console.log('[AppBridge] No cookies/session detected in embedded mode');
+        setNeedsCookieConsent(true);
+      }
+    }
+  }, [isActuallyEmbedded]);
+  
   // Initialize App Bridge v4+ using createApp pattern
   useEffect(() => {
-    if (isEmbedded && finalHost && apiKey) {
+    if (isActuallyEmbedded && finalHost && apiKey && !needsCookieConsent) {
       console.log('[AppBridge] Initializing App Bridge v4+ with createApp pattern');
       
       // Dynamically import App Bridge to avoid SSR issues
@@ -74,10 +104,6 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
             apiKey: apiKey,
             host: finalHost,
             forceRedirect: false,
-            // Add cookie-friendly configuration
-            forceRedirect: false,
-            // Enable iframe communication
-            isEmbedded: true,
           });
           
           // Store app instance globally for use by other components
@@ -85,33 +111,74 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
             (window as any).shopifyApp = app;
           }
           
+          setAppBridgeReady(true);
           console.log('[AppBridge] ✅ App Bridge v4+ initialized successfully');
         } catch (error) {
           console.error('[AppBridge] ❌ Failed to initialize App Bridge:', error);
+          // If App Bridge fails, we might need cookie consent
+          setNeedsCookieConsent(true);
         }
       }).catch((error) => {
         console.error('[AppBridge] ❌ Failed to import App Bridge:', error);
+        setNeedsCookieConsent(true);
       });
     } else {
       // Log why App Bridge wasn't initialized
       if (process.env.NODE_ENV === 'development') {
-        if (!isEmbedded) {
+        if (!isActuallyEmbedded) {
           console.log('[AppBridge] Running in standalone mode (not embedded)');
         } else if (!finalHost) {
           console.warn('[AppBridge] ⚠️ Embedded but missing host parameter');
         } else if (!apiKey) {
           console.error('[AppBridge] ❌ Missing NEXT_PUBLIC_SHOPIFY_API_KEY environment variable');
+        } else if (needsCookieConsent) {
+          console.log('[AppBridge] ⚠️ Cookie consent needed');
         }
       }
     }
-  }, [isEmbedded, finalHost, apiKey]);
+  }, [isActuallyEmbedded, finalHost, apiKey, needsCookieConsent]);
   
   // Log initialization status
-  if (process.env.NODE_ENV === 'development' && isEmbedded) {
+  if (process.env.NODE_ENV === 'development' && isActuallyEmbedded) {
     console.log('[AppBridge] Initializing in embedded mode');
     console.log('[AppBridge] Shop:', shop || 'not provided');
     console.log('[AppBridge] Host:', finalHost ? 'present' : 'missing');
     console.log('[AppBridge] API Key:', apiKey ? 'configured' : 'MISSING - Set NEXT_PUBLIC_SHOPIFY_API_KEY');
+    console.log('[AppBridge] Cookie consent needed:', needsCookieConsent);
+    console.log('[AppBridge] App Bridge ready:', appBridgeReady);
+  }
+  
+  // Show cookie consent page if needed
+  if (needsCookieConsent && isActuallyEmbedded) {
+    return (
+      <div style={{ 
+        padding: '20px', 
+        textAlign: 'center',
+        fontFamily: 'system-ui, -apple-system, sans-serif'
+      }}>
+        <h2>Cookie Consent Required</h2>
+        <p>This app requires cookies to function properly in embedded mode.</p>
+        <button 
+          onClick={() => {
+            // Try to enable cookies and reload
+            window.location.reload();
+          }}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: '#0070f3',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Enable Cookies & Reload
+        </button>
+        <p style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
+          If this doesn't work, try opening the app in a new tab or different browser.
+        </p>
+      </div>
+    );
   }
   
   return <>{children}</>;

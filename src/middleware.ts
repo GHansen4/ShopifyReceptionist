@@ -12,6 +12,11 @@ const publicRoutes = [
   '/api/vapi/webhook',  // Vapi webhooks (call events)
 ];
 
+// Pages that don't require authentication (for embedded app handling)
+const publicPages = [
+  '/bounce',            // Bounce page for cookie consent
+];
+
 /**
  * Middleware for Shopify embedded app authentication
  * 
@@ -26,6 +31,11 @@ export function middleware(request: NextRequest) {
 
   // Skip validation for public routes
   if (publicRoutes.some(route => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
+
+  // Skip validation for public pages
+  if (publicPages.some(page => pathname.startsWith(page))) {
     return NextResponse.next();
   }
 
