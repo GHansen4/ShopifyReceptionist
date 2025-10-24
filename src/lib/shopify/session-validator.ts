@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { shopify } from '../client';
+import { shopify } from './client';
 
 /**
  * Session Validation Helper for Shopify OAuth
