@@ -123,17 +123,24 @@ export async function POST(req: Request) {
     // ======================================================================
     const { data: shop, error } = await supabaseAdmin
       .from('shops')
-      .select('id, shop_domain, access_token')
+      .select('id, shop_domain, access_token_offline, access_token, vapi_assistant_id')
       .eq('vapi_assistant_id', assistantId)
       .maybeSingle();
 
     // Type assertion for shop data
-    const shopData = shop as { id: string; shop_domain: string; access_token: string } | null;
+    const shopData = shop as { 
+      id: string; 
+      shop_domain: string; 
+      access_token_offline: string | null;
+      access_token: string | null;
+      vapi_assistant_id: string | null;
+    } | null;
 
     // Temporary diagnostics
     console.log('[Vapi Functions] Shop lookup result:', {
       found: !!shopData,
       error: error?.message,
+      hasOfflineToken: !!shopData?.access_token_offline,
       hasAccessToken: !!shopData?.access_token,
       shopDomain: shopData?.shop_domain
     });
@@ -143,12 +150,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'SHOP_LOOKUP_FAILED' }, { status: 500 });
     }
 
-    if (!shopData?.access_token) {
+    // Use offline token first, fall back to access_token for backward compatibility
+    const accessToken = shopData?.access_token_offline || shopData?.access_token;
+    
+    if (!accessToken) {
       console.error('[Vapi Functions] No shop found or missing access token for assistant:', assistantId);
       return NextResponse.json({ ok: false, error: 'UNKNOWN_ASSISTANT_OR_TOKEN' }, { status: 401 });
     }
 
-    console.log('[Vapi Functions] Resolved shop:', shopData.shop_domain);
+    // Temporary logging for verification
+    console.log('[Vapi Functions] shop', shopData?.shop_domain, 'offline=', !!shopData?.access_token_offline);
+    console.log('[Vapi Functions] Resolved shop:', shopData.shop_domain, 'using token type:', shopData?.access_token_offline ? 'offline' : 'access');
 
     // ======================================================================
     // Extract tool name and arguments
@@ -199,21 +211,21 @@ export async function POST(req: Request) {
       case 'search_products':
         result = await handleSearchProducts(args, {
           shopDomain: shopData.shop_domain,
-          accessToken: shopData.access_token
+          accessToken: accessToken
         });
         break;
 
       case 'get_products':
         result = await handleGetProducts(args, {
           shopDomain: shopData.shop_domain,
-          accessToken: shopData.access_token
+          accessToken: accessToken
         });
         break;
 
       case 'check_order_status':
         result = await handleCheckOrderStatus(args, {
           shopDomain: shopData.shop_domain,
-          accessToken: shopData.access_token
+          accessToken: accessToken
         });
         break;
 

@@ -215,7 +215,7 @@ export async function GET(request: NextRequest) {
         .upsert({
           shop_domain: normalizedShop,
           shop_name: normalizedShop.replace('.myshopify.com', ''),
-          access_token: accessToken, // This is the offline token
+          access_token_offline: accessToken, // Store as offline token for Vapi calls
           installed_at: new Date().toISOString(),
           subscription_status: 'trial',
           plan_name: 'starter',
@@ -264,9 +264,9 @@ export async function GET(request: NextRequest) {
         const { error } = await supabase
           .from('shops')
           .upsert({
-            shop_domain: shop,
-            shop_name: shop.replace('.myshopify.com', ''),
-            access_token: accessToken,
+            shop_domain: normalizedShop,
+            shop_name: normalizedShop.replace('.myshopify.com', ''),
+            access_token_offline: accessToken, // Store as offline token for Vapi calls
             installed_at: new Date().toISOString(),
             subscription_status: 'trial',
             plan_name: 'starter',
