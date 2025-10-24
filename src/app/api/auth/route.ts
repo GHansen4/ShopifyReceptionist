@@ -17,10 +17,17 @@ import crypto from 'crypto';
  * GET /api/auth?shop=<shop-domain>
  */
 export async function GET(request: NextRequest) {
+  // 🚨🚨🚨 VERY OBVIOUS LOGGING TO PROVE OAUTH INITIATION 🚨🚨🚨
+  console.log('🚨🚨🚨 OAUTH INITIATION STARTED 🚨🚨🚨');
+  console.log('URL:', request.url);
+  console.log('Search params:', request.nextUrl.searchParams.toString());
+  
   return withAuthRateLimit(request, async () => {
     try {
       const searchParams = request.nextUrl.searchParams;
       const shop = searchParams.get('shop');
+
+      console.log('🚨🚨🚨 OAUTH INITIATION - Shop:', shop);
 
       if (process.env.NODE_ENV === 'development') {
         console.log('[OAuth] ═══════════════════════════════════════════════════════');

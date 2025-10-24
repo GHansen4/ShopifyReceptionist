@@ -19,6 +19,14 @@ export default function Home() {
   const idToken = searchParams.get('id_token');
   const session = searchParams.get('session');
   
+  // 🚨🚨🚨 VERY OBVIOUS LOGGING TO PROVE APP IS ACCESSED 🚨🚨🚨
+  console.log('🚨🚨🚨 APP PAGE LOADED 🚨🚨🚨');
+  console.log('Shop:', shop);
+  console.log('Embedded:', embedded);
+  console.log('Host:', host);
+  console.log('ID Token present:', !!idToken);
+  console.log('Session present:', !!session);
+  
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [needsAuth, setNeedsAuth] = useState(false);
   const [systemStatus, setSystemStatus] = useState<SystemStatus>({
