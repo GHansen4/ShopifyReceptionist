@@ -117,6 +117,15 @@ export async function GET(request: NextRequest) {
 
     const tokenData = await tokenResponse.json();
     const accessToken = tokenData.access_token;
+    
+    // 🚨🚨🚨 CRITICAL DEBUGGING FOR NULL ACCESS TOKEN 🚨🚨🚨
+    console.log('[OAuth Callback] 🔍 Token exchange response status:', tokenResponse.ok);
+    console.log('[OAuth Callback] 🔍 Token data:', {
+      hasAccessToken: !!accessToken,
+      tokenPrefix: accessToken?.substring(0, 10),
+      tokenLength: accessToken?.length,
+      fullTokenData: tokenData  // See what Shopify actually returned
+    });
 
     if (!accessToken) {
       console.error('[OAuth Callback] No access token in response');
@@ -211,6 +220,14 @@ export async function GET(request: NextRequest) {
     const normalizedShop = normalizeShopDomain(shop);
     console.log(`[OAuth Callback] Normalized shop domain: ${normalizedShop}`);
     
+    // 🚨🚨🚨 CRITICAL DEBUGGING FOR SHOPS TABLE INSERT 🚨🚨🚨
+    console.log('[OAuth Callback] 🔍 About to insert into shops table:', {
+      shopDomain: normalizedShop,
+      accessToken: accessToken ? `${accessToken.substring(0, 10)}...` : 'NULL',
+      accessTokenLength: accessToken?.length,
+      accessTokenType: typeof accessToken
+    });
+    
     let shopSaveSuccess = false;
     let lastError: any = null;
     
@@ -265,6 +282,14 @@ export async function GET(request: NextRequest) {
     // If admin client failed, try regular client as fallback
     if (!shopSaveSuccess) {
       console.log('[OAuth Callback] 🔄 Trying regular Supabase client as fallback...');
+      
+      // 🚨🚨🚨 CRITICAL DEBUGGING FOR FALLBACK INSERT 🚨🚨🚨
+      console.log('[OAuth Callback] 🔍 Fallback insert - accessToken check:', {
+        accessToken: accessToken ? `${accessToken.substring(0, 10)}...` : 'NULL',
+        accessTokenLength: accessToken?.length,
+        accessTokenType: typeof accessToken
+      });
+      
       try {
         const { supabase } = await import('@/lib/supabase/client');
         const { error } = await supabase
