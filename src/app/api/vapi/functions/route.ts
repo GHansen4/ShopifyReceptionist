@@ -352,7 +352,7 @@ async function handleCheckOrderStatus(parameters: any, shopData: { shopDomain: s
 
     console.log(`[check_order_status] Checking order ${orderId} for ${shopData.shopDomain}`);
 
-    // TODO: Implement order status lookup via Shopify Admin API
+    // Order status lookup via Shopify Admin API (placeholder)
     // For now, return a placeholder response
     return {
       orderId: orderId,

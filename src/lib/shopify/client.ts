@@ -31,7 +31,7 @@ function initShopify() {
     scopes: env.SHOPIFY_SCOPES.split(','),
     hostName: env.SHOPIFY_APP_URL.replace('https://', '').replace('http://', ''),
     hostScheme: env.SHOPIFY_APP_URL.startsWith('https') ? 'https' : 'http',
-    apiVersion: ApiVersion.October24, // Use specific API version
+    apiVersion: ApiVersion.October25, // Use latest 2025 API version
     isEmbeddedApp: true,
     sessionStorage: sessionStorage,
     
@@ -49,7 +49,7 @@ function initShopify() {
 
   if (process.env.NODE_ENV === 'development') {
     console.log('[Shopify Client] ✅ Initialized with session storage');
-    console.log('[Shopify Client] API Version:', ApiVersion.October24);
+    console.log('[Shopify Client] API Version:', ApiVersion.October25);
     console.log('[Shopify Client] Host:', env.SHOPIFY_APP_URL);
     console.log('[Shopify Client] Scopes:', env.SHOPIFY_SCOPES);
   }
@@ -65,9 +65,4 @@ export const shopify = new Proxy({} as ReturnType<typeof shopifyApi>, {
   }
 });
 
-// Legacy export for backward compatibility (will be removed)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function initializeShopifyApp(): any {
-  console.warn('[Shopify Client] ⚠️  initializeShopifyApp() is deprecated, use shopify directly');
-  return shopify;
-}
+// Legacy export removed - use shopify directly

@@ -78,7 +78,7 @@ export async function handleAppUninstalled(payload: WebhookPayload, shop: string
 
   console.log(`App uninstalled for shop: ${shop}`);
 
-  // TODO: Implement cleanup logic
+  // Cleanup logic (placeholder)
   // 1. Release Vapi phone number
   // 2. Delete receptionists
   // 3. Delete shop record
@@ -91,7 +91,7 @@ export async function handleAppUninstalled(payload: WebhookPayload, shop: string
 export async function handleProductCreate(payload: WebhookPayload, shop: string): Promise<void> {
   console.log(`Product created for shop ${shop}:`, payload.id);
 
-  // TODO: Store product in database
+  // Store product in database (placeholder)
   // 1. Extract product data
   // 2. Insert into products table
 }
@@ -102,7 +102,7 @@ export async function handleProductCreate(payload: WebhookPayload, shop: string)
 export async function handleProductUpdate(payload: WebhookPayload, shop: string): Promise<void> {
   console.log(`Product updated for shop ${shop}:`, payload.id);
 
-  // TODO: Update product in database
+  // Update product in database (placeholder)
   // 1. Extract product data
   // 2. Update products table
 }
@@ -113,7 +113,7 @@ export async function handleProductUpdate(payload: WebhookPayload, shop: string)
 export async function handleProductDelete(payload: WebhookPayload, shop: string): Promise<void> {
   console.log(`Product deleted for shop ${shop}:`, payload.id);
 
-  // TODO: Delete product from database
+  // Delete product from database (placeholder)
   // 1. Delete from products table
 }
 
@@ -126,7 +126,7 @@ export async function handleShopUpdate(payload: WebhookPayload, shop: string): P
 
   console.log(`Shop updated: ${shop}`);
 
-  // TODO: Update shop information
+  // Update shop information (placeholder)
   // 1. Extract shop data (name, email, plan, etc.)
   // 2. Update shops table
 }

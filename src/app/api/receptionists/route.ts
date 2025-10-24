@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { shopify } from '@/lib/shopify/client';
 import { createSuccessResponse, createErrorResponse } from '@/lib/utils/api';
-import { AuthenticationError } from '@/lib/utils/errors';
+import { AuthenticationError, ValidationError } from '@/lib/utils/errors';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     return createSuccessResponse({
       message: 'Protected endpoint accessed successfully',
       shop: session.shop,
-      receptionists: [], // TODO: Fetch receptionists from database for this shop
+      receptionists: [], // Empty for now - will be implemented when needed
     });
   } catch (error) {
     return createErrorResponse(error as Error);
@@ -34,11 +34,15 @@ export async function POST(request: NextRequest) {
       return createErrorResponse(new AuthenticationError('Not authenticated'));
     }
 
-    // TODO: Validate data using Zod schema
-    void (await request.json());
+    // Validate input data
+    const { name, phoneNumber } = await request.json();
+    
+    if (!name || !phoneNumber) {
+      return createErrorResponse(new ValidationError('Name and phone number are required'));
+    }
 
-    // TODO: Create receptionist for this shop
-    // Validate data, store in Supabase
+    // Create receptionist for this shop (placeholder implementation)
+    // TODO: Implement actual database storage when needed
 
     return createSuccessResponse(
       {

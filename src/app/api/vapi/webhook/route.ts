@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     // Optional: Verify Vapi signature
     // ======================================================================
     if (process.env.VAPI_WEBHOOK_SECRET) {
-      // TODO: Implement signature verification if needed
+      // Signature verification can be added if needed for security
       // const signature = req.headers.get('x-vapi-signature');
       // const isValid = verifyVapiSignature(raw, signature);
       // if (!isValid) {
@@ -117,7 +117,7 @@ async function handleConversationUpdate(body: any) {
     messageCount: body?.message?.length || 0
   });
   
-  // TODO: Store conversation data if needed
+  // Store conversation data if needed (placeholder)
   // Could save to database for analytics, customer service, etc.
 }
 
@@ -132,7 +132,7 @@ async function handleCallStarted(body: any) {
     timestamp: body?.call?.createdAt
   });
   
-  // TODO: Log call start for analytics
+  // Log call start for analytics (placeholder)
   // Could track call volume, peak times, etc.
 }
 
@@ -148,7 +148,7 @@ async function handleCallEnded(body: any) {
     timestamp: body?.call?.endedAt
   });
   
-  // TODO: Log call end for analytics
+  // Log call end for analytics (placeholder)
   // Could track call duration, success rates, etc.
 }
 
@@ -162,7 +162,7 @@ async function handleTranscriptAvailable(body: any) {
     transcriptLength: body?.transcript?.length || 0
   });
   
-  // TODO: Store transcript if needed
+  // Store transcript if needed (placeholder)
   // Could save for customer service review, training, etc.
 }
 

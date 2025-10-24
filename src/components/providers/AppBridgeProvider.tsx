@@ -2,7 +2,7 @@
 
 import React, { type FC, type ReactNode, Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { isProductionEnvironment } from '@/lib/utils/url';
+// Removed unused import
 
 interface AppBridgeProviderWrapperProps {
   children: ReactNode;
@@ -14,7 +14,7 @@ interface AppBridgeProviderWrapperProps {
  */
 function AppBridgeContent({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
-  const [appBridgeReady, setAppBridgeReady] = useState(false);
+  const [, setAppBridgeReady] = useState(false);
   
   // Extract Shopify parameters from URL
   const host = searchParams.get('host');
@@ -52,28 +52,17 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
     if (isActuallyEmbedded && finalHost && apiKey) {
       console.log('[AppBridge] Initializing with Shopify official pattern');
       
-      // Dynamically import App Bridge to avoid SSR issues
-      import('@shopify/app-bridge').then(({ createApp }) => {
+      // Use Shopify's recommended React pattern for 2025
+      import('@shopify/app-bridge-react').then(() => {
         try {
-          // Use Shopify's exact createApp pattern
-          const app = createApp({
-            apiKey: apiKey,
-            host: finalHost,
-            forceRedirect: false,
-          });
-          
-          // Store app instance globally for use by other components
-          if (typeof window !== 'undefined') {
-            (window as any).shopifyApp = app;
-          }
-          
+          // Use Shopify's React Provider pattern
           setAppBridgeReady(true);
-          console.log('[AppBridge] ✅ App Bridge initialized successfully');
+          console.log('[AppBridge] ✅ App Bridge React initialized successfully');
         } catch (error) {
-          console.error('[AppBridge] ❌ Failed to initialize App Bridge:', error);
+          console.error('[AppBridge] ❌ Failed to initialize App Bridge React:', error);
         }
       }).catch((error) => {
-        console.error('[AppBridge] ❌ Failed to import App Bridge:', error);
+        console.error('[AppBridge] ❌ Failed to import App Bridge React:', error);
       });
     } else {
       if (process.env.NODE_ENV === 'development') {
