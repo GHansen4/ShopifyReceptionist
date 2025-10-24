@@ -74,6 +74,10 @@ function AppBridgeContent({ children }: { children: ReactNode }) {
             apiKey: apiKey,
             host: finalHost,
             forceRedirect: false,
+            // Add cookie-friendly configuration
+            forceRedirect: false,
+            // Enable iframe communication
+            isEmbedded: true,
           });
           
           // Store app instance globally for use by other components

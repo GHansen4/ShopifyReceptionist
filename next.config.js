@@ -18,6 +18,11 @@ let nextConfig = {
             key: 'Content-Security-Policy',
             value: "frame-ancestors https://*.myshopify.com https://admin.shopify.com 'self'",
           },
+          // Cookie-friendly headers for Shopify embedded apps
+          {
+            key: 'Set-Cookie',
+            value: 'SameSite=None; Secure; HttpOnly',
+          },
           {
             key: 'X-XSS-Protection',
             value: '1; mode=block',
