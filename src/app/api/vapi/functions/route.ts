@@ -119,48 +119,38 @@ export async function POST(req: Request) {
     console.log('[Vapi Functions] Assistant ID:', assistantId);
 
     // ======================================================================
-    // Resolve shop by assistant ID
+    // Resolve shop by assistant ID (resilient to missing columns)
     // ======================================================================
     const { data: shop, error } = await supabaseAdmin
       .from('shops')
-      .select('id, shop_domain, access_token_offline, access_token, vapi_assistant_id')
+      .select('id, shop_domain, vapi_assistant_id, access_token, access_token_offline')
       .eq('vapi_assistant_id', assistantId)
       .maybeSingle();
+
+    if (error) {
+      console.error('[Vapi Functions] shop lookup error', error);
+      return NextResponse.json({ ok: false, error: 'SHOP_LOOKUP_FAILED' }, { status: 500 });
+    }
 
     // Type assertion for shop data
     const shopData = shop as { 
       id: string; 
       shop_domain: string; 
-      access_token_offline: string | null;
-      access_token: string | null;
-      vapi_assistant_id: string | null;
+      access_token_offline?: string | null;
+      access_token?: string | null;
+      vapi_assistant_id?: string | null;
     } | null;
 
-    // Temporary diagnostics
-    console.log('[Vapi Functions] Shop lookup result:', {
-      found: !!shopData,
-      error: error?.message,
-      hasOfflineToken: !!shopData?.access_token_offline,
-      hasAccessToken: !!shopData?.access_token,
-      shopDomain: shopData?.shop_domain
-    });
-
-    if (error) {
-      console.error('[Vapi Functions] Shop lookup error:', error);
-      return NextResponse.json({ ok: false, error: 'SHOP_LOOKUP_FAILED' }, { status: 500 });
+    // Prefer offline token; fallback to legacy access_token
+    const adminToken = shopData?.access_token_offline ?? shopData?.access_token;
+    if (!adminToken || !shopData) {
+      console.warn('[Vapi Functions] Missing admin token for shop', shopData?.shop_domain);
+      return NextResponse.json({ ok: false, error: 'MISSING_OFFLINE_TOKEN' }, { status: 401 });
     }
 
-    // Use offline token first, fall back to access_token for backward compatibility
-    const accessToken = shopData?.access_token_offline || shopData?.access_token;
-    
-    if (!accessToken) {
-      console.error('[Vapi Functions] No shop found or missing access token for assistant:', assistantId);
-      return NextResponse.json({ ok: false, error: 'UNKNOWN_ASSISTANT_OR_TOKEN' }, { status: 401 });
-    }
-
-    // Temporary logging for verification
-    console.log('[Vapi Functions] shop', shopData?.shop_domain, 'offline=', !!shopData?.access_token_offline);
-    console.log('[Vapi Functions] Resolved shop:', shopData.shop_domain, 'using token type:', shopData?.access_token_offline ? 'offline' : 'access');
+    // Temporary diagnostics (remove later)
+    console.log('[Vapi Functions] shop=%s offline=%s legacy=%s',
+      shopData?.shop_domain, !!shopData?.access_token_offline, !!shopData?.access_token);
 
     // ======================================================================
     // Extract tool name and arguments
@@ -211,21 +201,21 @@ export async function POST(req: Request) {
       case 'search_products':
         result = await handleSearchProducts(args, {
           shopDomain: shopData.shop_domain,
-          accessToken: accessToken
+          accessToken: adminToken
         });
         break;
 
       case 'get_products':
         result = await handleGetProducts(args, {
           shopDomain: shopData.shop_domain,
-          accessToken: accessToken
+          accessToken: adminToken
         });
         break;
 
       case 'check_order_status':
         result = await handleCheckOrderStatus(args, {
           shopDomain: shopData.shop_domain,
-          accessToken: accessToken
+          accessToken: adminToken
         });
         break;
 
