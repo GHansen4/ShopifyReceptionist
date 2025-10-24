@@ -11,6 +11,7 @@ const publicRoutes = [
   '/api/vapi/test',     // Vapi test endpoints (development only)
   '/api/vapi/functions',// Vapi function calling (used by AI during calls)
   '/api/vapi/webhook',  // Vapi webhooks (call events)
+  '/api/vapi/provision', // Vapi provisioning (used during setup)
 ];
 
 // Pages that don't require authentication (for embedded app handling)

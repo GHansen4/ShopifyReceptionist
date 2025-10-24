@@ -9,6 +9,11 @@ import { shopify } from './client';
  */
 export async function validateSession(request: NextRequest) {
   try {
+    // Validate request object
+    if (!request || !request.headers) {
+      throw new Error('Invalid request object - missing headers');
+    }
+
     // Extract session ID from request
     const sessionId = extractSessionId(request);
     
@@ -52,6 +57,11 @@ export async function validateSession(request: NextRequest) {
  * Extract session ID from request headers or URL parameters
  */
 function extractSessionId(request: NextRequest): string | null {
+  // Validate request object
+  if (!request || !request.headers) {
+    return null;
+  }
+
   // Try Authorization header first (for API calls)
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
