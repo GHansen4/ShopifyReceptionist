@@ -21,8 +21,14 @@ export const dynamic = 'force-dynamic';
  * GET /api/auth/callback?code=...&hmac=...&shop=...&state=...
  */
 export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  
+  // 🚨🚨🚨 VERY OBVIOUS LOGGING TO PROVE CALLBACK EXECUTES 🚨🚨🚨
+  console.log('🚨🚨🚨 OAUTH CALLBACK STARTED 🚨🚨🚨');
+  console.log('Shop:', searchParams.get('shop'));
+  console.log('Code present:', !!searchParams.get('code'));
+  
   try {
-    const searchParams = request.nextUrl.searchParams;
     const code = searchParams.get('code');
     const hmac = searchParams.get('hmac');
     const shop = searchParams.get('shop');
@@ -314,6 +320,9 @@ export async function GET(request: NextRequest) {
       console.log('[OAuth Callback] ═══════════════════════════════════════════════════════');
     }
 
+    // 🚨🚨🚨 VERY OBVIOUS LOGGING TO PROVE CALLBACK COMPLETES 🚨🚨🚨
+    console.log('🚨🚨🚨 OAUTH CALLBACK COMPLETED 🚨🚨🚨');
+    
     // Redirect to app home page
     const redirectUrl = `/?shop=${shop}${host ? `&host=${encodeURIComponent(host)}` : ''}`;
     
