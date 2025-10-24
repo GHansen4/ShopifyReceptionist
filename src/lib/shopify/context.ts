@@ -13,6 +13,10 @@ export interface ShopContext {
  * Extracts shop context from request headers (set by middleware)
  */
 export function getShopContext(request: NextRequest): ShopContext | null {
+  if (!request || !request.headers) {
+    return null;
+  }
+  
   const shop = request.headers.get('x-shopify-shop');
   const sessionToken = request.headers.get('x-shopify-session-token');
   const userId = request.headers.get('x-shopify-user-id');

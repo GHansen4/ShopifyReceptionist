@@ -34,6 +34,17 @@ export async function POST(
     // ======================================================================
     // Security: Validate API Key
     // ======================================================================
+    // Validate request object first
+    if (!request || !request.headers) {
+      console.error('[Vapi Functions] ❌ Invalid request object');
+      return NextResponse.json({
+        results: [{
+          type: 'error',
+          error: 'Invalid request object'
+        }]
+      }, { status: 400 });
+    }
+
     // Support multiple authentication methods:
     // 1. X-Vapi-Secret (Vapi's preferred method)
     // 2. x-api-key (fallback)

@@ -29,6 +29,21 @@ export async function POST(request: NextRequest) {
 
   try {
     console.log(`[${requestId}] 🔍 VAPI PROVISION DEBUG: Starting detailed debugging...`);
+    
+    // Validate request object first
+    if (!request || !request.headers) {
+      console.error(`[${requestId}] ❌ Invalid request object`);
+      return NextResponse.json({
+        success: false,
+        error: {
+          code: 'INVALID_REQUEST',
+          message: 'Invalid request object - missing headers',
+          statusCode: 400,
+        },
+        timestamp: new Date().toISOString(),
+      }, { status: 400 });
+    }
+    
     console.log(`[${requestId}] Request headers:`, {
       'x-shopify-shop': request.headers.get('x-shopify-shop'),
       'x-shopify-session-token': request.headers.get('x-shopify-session-token'),

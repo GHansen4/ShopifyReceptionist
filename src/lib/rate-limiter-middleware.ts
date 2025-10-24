@@ -13,6 +13,9 @@ import { logError } from './utils/errors';
  * Extract shop ID from request context
  */
 function getShopIdFromRequest(request: NextRequest): string | null {
+  if (!request || !request.headers) {
+    return null;
+  }
   return request.headers.get('x-shopify-shop') || null;
 }
 
@@ -20,6 +23,9 @@ function getShopIdFromRequest(request: NextRequest): string | null {
  * Extract IP address from request
  */
 function getIpFromRequest(request: NextRequest): string {
+  if (!request || !request.headers) {
+    return 'unknown';
+  }
   return (
     request.headers.get('x-forwarded-for')?.split(',')[0] ||
     request.headers.get('x-real-ip') ||
@@ -69,6 +75,13 @@ export async function withWebhookRateLimit(
   request: NextRequest,
   handler: () => Promise<NextResponse>
 ): Promise<NextResponse> {
+  if (!request || !request.headers) {
+    return NextResponse.json(
+      { success: false, error: { code: 'INVALID_REQUEST', message: 'Invalid request object' } },
+      { status: 400 }
+    );
+  }
+
   const shopDomain = request.headers.get('x-shopify-shop-api-call-limit');
 
   if (!shopDomain) {
