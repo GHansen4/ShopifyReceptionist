@@ -18,6 +18,9 @@
 -- STEP 1: DROP ALL EXISTING STRUCTURES (DESTRUCTIVE)
 -- ============================================================================
 
+-- Begin transaction for atomicity
+BEGIN;
+
 -- Drop all tables in correct order (respecting foreign keys)
 DROP TABLE IF EXISTS call_actions CASCADE;
 DROP TABLE IF EXISTS calls CASCADE;
@@ -56,10 +59,18 @@ CREATE TABLE shopify_sessions (
   is_online BOOLEAN NOT NULL DEFAULT FALSE,       -- Online (per-user) vs Offline (per-shop)
   scope VARCHAR(255),                             -- Granted scopes
   expires TIMESTAMP WITH TIME ZONE,               -- Token expiration (NULL for offline tokens)
-  access_token TEXT NOT NULL,                     -- Shopify access token
+  access_token TEXT,                              -- Shopify access token (NULLABLE for offline tokens)
   online_access_info JSONB,                      -- Additional info for online tokens
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- Add constraints for data integrity
+  CONSTRAINT check_shop_format CHECK (shop ~ '^[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]\.myshopify\.com$'),
+  CONSTRAINT check_session_id_format CHECK (id ~ '^(offline|online)_[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]\.myshopify\.com(_[a-zA-Z0-9]+)?$'),
+  CONSTRAINT check_online_token_required CHECK (
+    (is_online = true AND access_token IS NOT NULL AND expires IS NOT NULL) OR
+    (is_online = false AND access_token IS NOT NULL)
+  )
 );
 
 -- ============================================================================
@@ -100,6 +111,8 @@ CREATE TABLE shops (
   installed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  
+  -- ❌ REMOVED: access_token - belongs in shopify_sessions table only
 );
 
 -- Calls table
@@ -153,10 +166,12 @@ CREATE TABLE products (
 -- STEP 5: PERFORMANCE INDEXES
 -- ============================================================================
 
--- Shopify sessions indexes
+-- Shopify sessions indexes (CRITICAL for performance)
 CREATE INDEX idx_shopify_sessions_shop ON shopify_sessions(shop);
 CREATE INDEX idx_shopify_sessions_expires ON shopify_sessions(expires) WHERE expires IS NOT NULL;
 CREATE INDEX idx_shopify_sessions_online ON shopify_sessions(is_online);
+CREATE INDEX idx_shopify_sessions_shop_online ON shopify_sessions(shop, is_online);
+CREATE INDEX idx_shopify_sessions_token ON shopify_sessions(access_token) WHERE access_token IS NOT NULL;
 
 -- Shops indexes
 CREATE INDEX idx_shops_domain ON shops(shop_domain);
@@ -218,8 +233,13 @@ ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 -- ============================================================================
 
 -- Shopify sessions policies (service role only)
+-- Sessions are internal to the app - no user access needed
 CREATE POLICY "Service role manages sessions" ON shopify_sessions
   FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- Deny all access to authenticated users (sessions are internal)
+CREATE POLICY "Deny user access to sessions" ON shopify_sessions
+  FOR ALL TO authenticated USING (false) WITH CHECK (false);
 
 -- Shops policies
 CREATE POLICY "Service role manages shops" ON shops
@@ -269,9 +289,9 @@ ALTER TABLE shops ADD CONSTRAINT check_phone_format
 ALTER TABLE shops ADD CONSTRAINT check_provisioned_phone_format 
   CHECK (provisioned_phone_number IS NULL OR provisioned_phone_number ~ '^\+?[1-9]\d{1,14}$');
 
--- Ensure Vapi assistant ID is unique
-ALTER TABLE shops ADD CONSTRAINT check_vapi_assistant_unique 
-  CHECK (vapi_assistant_id IS NOT NULL);
+-- Ensure Vapi assistant ID is unique (but nullable for shops not yet provisioned)
+-- Remove the NOT NULL constraint - shops can exist without Vapi integration
+-- The UNIQUE constraint on the column definition is sufficient
 
 -- ============================================================================
 -- STEP 11: COMMENTS FOR DOCUMENTATION
@@ -319,19 +339,31 @@ COMMENT ON COLUMN shops.shop_domain IS 'Normalized shop domain (e.g., store.mysh
 -- Run these queries to verify the refactor worked:
 
 -- 1. Check all tables exist
--- SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';
+SELECT 'Tables created:' as status, table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;
 
 -- 2. Check shopify_sessions structure
--- \d shopify_sessions
+SELECT 'shopify_sessions columns:' as status, column_name, data_type, is_nullable 
+FROM information_schema.columns 
+WHERE table_name = 'shopify_sessions' AND table_schema = 'public'
+ORDER BY ordinal_position;
 
 -- 3. Check shops structure  
--- \d shops
+SELECT 'shops columns:' as status, column_name, data_type, is_nullable 
+FROM information_schema.columns 
+WHERE table_name = 'shops' AND table_schema = 'public'
+ORDER BY ordinal_position;
 
 -- 4. Check RLS is enabled
--- SELECT tablename, rowsecurity FROM pg_tables WHERE schemaname = 'public';
+SELECT 'RLS Status:' as status, tablename, rowsecurity FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;
 
 -- 5. Check indexes
--- SELECT indexname FROM pg_indexes WHERE schemaname = 'public';
+SELECT 'Indexes created:' as status, indexname, tablename FROM pg_indexes WHERE schemaname = 'public' ORDER BY tablename, indexname;
+
+-- 6. Check constraints
+SELECT 'Constraints:' as status, conname, contype, conrelid::regclass as table_name 
+FROM pg_constraint 
+WHERE connamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+ORDER BY conrelid::regclass, conname;
 
 -- ============================================================================
 -- NEXT STEPS AFTER REFACTOR
@@ -350,6 +382,13 @@ COMMENT ON COLUMN shops.shop_domain IS 'Normalized shop domain (e.g., store.mysh
 -- 1. Restore from Supabase backup
 -- 2. Or run the original migration files in order
 -- 3. Or contact support for database restoration
+
+-- ============================================================================
+-- COMMIT TRANSACTION
+-- ============================================================================
+
+-- Commit the transaction
+COMMIT;
 
 -- ============================================================================
 -- END OF SCRIPT

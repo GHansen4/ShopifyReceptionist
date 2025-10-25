@@ -46,6 +46,7 @@ export class SupabaseSessionStorage implements SessionStorage {
         expires: session.expires ? new Date(session.expires).toISOString() : null,
         access_token: session.accessToken,
         online_access_info: session.onlineAccessInfo ? JSON.stringify(session.onlineAccessInfo) : null,
+        created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 

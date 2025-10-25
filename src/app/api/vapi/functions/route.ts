@@ -119,83 +119,74 @@ export async function POST(req: Request) {
     console.log('[Vapi Functions] Assistant ID:', assistantId);
 
     // ======================================================================
-    // Resolve shop by assistant ID (resilient to missing columns)
+    // CORRECT DATA FLOW: Get shop domain from shops table, then session from shopify_sessions
     // ======================================================================
     console.log('[Vapi Functions] Looking up shop for assistant ID:', assistantId);
     
-    const { data: shop, error } = await supabaseAdmin
+    // Step 1: Get shop domain from shops table (business data only)
+    const { data: shop, error: shopError } = await supabaseAdmin
       .from('shops')
-      .select('id, shop_domain, vapi_assistant_id, access_token, access_token_offline')
+      .select('id, shop_domain, vapi_assistant_id')
       .eq('vapi_assistant_id', assistantId)
       .maybeSingle();
 
-    if (error) {
-      console.error('[Vapi Functions] shop lookup error', error);
+    if (shopError) {
+      console.error('[Vapi Functions] Shop lookup error', shopError);
       return NextResponse.json({ ok: false, error: 'SHOP_LOOKUP_FAILED' }, { status: 500 });
     }
 
-    // Enhanced logging for debugging
-    console.log('[Vapi Functions] Shop lookup result:', {
-      found: !!shop,
-      shop_domain: shop?.shop_domain,
-      has_offline_token: !!shop?.access_token_offline,
-      has_legacy_token: !!shop?.access_token,
-      assistant_id_match: shop?.vapi_assistant_id === assistantId
-    });
-
-    // If no shop found by assistant ID, try fallback lookup
-    let shopData = shop;
-    if (!shopData) {
-      console.log('[Vapi Functions] No shop found by assistant ID, trying fallback lookup...');
-      
-      // Fallback: Look up by shop domain from Vapi assistant data
-      // This is a temporary workaround for missing vapi_assistant_id mapping
-      const { data: fallbackShop, error: fallbackError } = await supabaseAdmin
-        .from('shops')
-        .select('id, shop_domain, vapi_assistant_id, access_token, access_token_offline')
-        .not('access_token', 'is', null)
-        .limit(1)
-        .maybeSingle();
-
-      if (fallbackError) {
-        console.error('[Vapi Functions] Fallback shop lookup error', fallbackError);
-      } else if (fallbackShop) {
-        console.log('[Vapi Functions] Using fallback shop:', fallbackShop.shop_domain);
-        shopData = fallbackShop;
-      }
-    }
-
-    // Type assertion for shop data
-    const shopData = shopData as { 
-      id: string; 
-      shop_domain: string; 
-      access_token_offline?: string | null;
-      access_token?: string | null;
-      vapi_assistant_id?: string | null;
-    } | null;
-
-    // Prefer offline token; fallback to legacy access_token
-    const adminToken = shopData?.access_token_offline ?? shopData?.access_token;
-    if (!adminToken || !shopData) {
-      console.warn('[Vapi Functions] Missing admin token for shop', shopData?.shop_domain || 'undefined');
-      
-      // Enhanced error response with debugging info
+    if (!shop) {
+      console.warn('[Vapi Functions] No shop found for assistant ID:', assistantId);
       return NextResponse.json({ 
         ok: false, 
-        error: 'MISSING_OFFLINE_TOKEN',
-        debug: {
-          assistantId,
-          shopFound: !!shopData,
-          shopDomain: shopData?.shop_domain,
-          hasOfflineToken: !!shopData?.access_token_offline,
-          hasLegacyToken: !!shopData?.access_token
+        error: 'SHOP_NOT_FOUND',
+        debug: { assistantId }
+      }, { status: 404 });
+    }
+
+    console.log('[Vapi Functions] Found shop:', shop.shop_domain);
+
+    // Step 2: Get access token from shopify_sessions table (CORRECT OAUTH STORAGE)
+    const { data: session, error: sessionError } = await supabaseAdmin
+      .from('shopify_sessions')
+      .select('access_token, shop, is_online, expires')
+      .eq('shop', shop.shop_domain)
+      .eq('is_online', false) // Prefer offline tokens for API access
+      .maybeSingle();
+
+    if (sessionError) {
+      console.error('[Vapi Functions] Session lookup error', sessionError);
+      return NextResponse.json({ ok: false, error: 'SESSION_LOOKUP_FAILED' }, { status: 500 });
+    }
+
+    if (!session || !session.access_token) {
+      console.warn('[Vapi Functions] No valid session found for shop:', shop.shop_domain);
+      return NextResponse.json({ 
+        ok: false, 
+        error: 'NO_VALID_SESSION',
+        debug: { 
+          shopDomain: shop.shop_domain,
+          sessionFound: !!session,
+          hasAccessToken: !!session?.access_token
         }
       }, { status: 401 });
     }
 
-    // Temporary diagnostics (remove later)
-    console.log('[Vapi Functions] shop=%s offline=%s legacy=%s',
-      shopData?.shop_domain, !!shopData?.access_token_offline, !!shopData?.access_token);
+    console.log('[Vapi Functions] Found valid session for shop:', shop.shop_domain);
+
+    // Use the session data for API calls
+    const shopData = {
+      id: shop.id,
+      shop_domain: shop.shop_domain,
+      access_token: session.access_token
+    };
+
+    // Log successful data flow
+    console.log('[Vapi Functions] Data flow successful:', {
+      shopDomain: shopData.shop_domain,
+      hasAccessToken: !!shopData.access_token,
+      tokenLength: shopData.access_token?.length || 0
+    });
 
     // ======================================================================
     // Extract tool name and arguments
@@ -246,21 +237,21 @@ export async function POST(req: Request) {
       case 'search_products':
         result = await handleSearchProducts(args, {
           shopDomain: shopData.shop_domain,
-          accessToken: adminToken
+          accessToken: shopData.access_token
         });
         break;
 
       case 'get_products':
         result = await handleGetProducts(args, {
           shopDomain: shopData.shop_domain,
-          accessToken: adminToken
+          accessToken: shopData.access_token
         });
         break;
 
       case 'check_order_status':
         result = await handleCheckOrderStatus(args, {
           shopDomain: shopData.shop_domain,
-          accessToken: adminToken
+          accessToken: shopData.access_token
         });
         break;
 

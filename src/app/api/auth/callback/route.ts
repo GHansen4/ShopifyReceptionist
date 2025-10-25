@@ -47,34 +47,34 @@ export async function GET(request: NextRequest) {
     // Shopify handles session storage in shopify_sessions table automatically
     const normalizedShop = normalizeShopDomain(session.shop);
     
-    if (session.accessToken) {
-      const { error } = await supabaseAdmin
-        .from('shops')
-        .upsert({
-          shop_domain: normalizedShop,
-          shop_name: normalizedShop.replace('.myshopify.com', ''),
-          access_token: session.accessToken, // Keep for Vapi integration
-          installed_at: new Date().toISOString(),
-          subscription_status: 'trial',
-          plan_name: 'starter',
-          call_minutes_used: 0,
-          call_minutes_limit: 100,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'shop_domain'
-        });
+    // Store business data only (NO auth tokens in shops table)
+    const { error } = await supabaseAdmin
+      .from('shops')
+      .upsert({
+        shop_domain: normalizedShop,
+        shop_name: normalizedShop.replace('.myshopify.com', ''),
+        // ❌ REMOVED: access_token - this belongs in shopify_sessions table
+        installed_at: new Date().toISOString(),
+        subscription_status: 'trial',
+        plan_name: 'starter',
+        call_minutes_used: 0,
+        call_minutes_limit: 100,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'shop_domain'
+      });
 
-      if (error) {
-        console.error('[OAuth Callback] Failed to save shop metadata:', error);
-        return NextResponse.json(
-          { error: 'Failed to save shop metadata', details: error.message },
-          { status: 500 }
-        );
-      }
+    if (error) {
+      console.error('[OAuth Callback] Failed to save shop metadata:', error);
+      return NextResponse.json(
+        { error: 'Failed to save shop metadata', details: error.message },
+        { status: 500 }
+      );
+    }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[OAuth Callback] ✅ Shop metadata saved successfully');
-      }
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[OAuth Callback] ✅ Shop metadata saved successfully');
+      console.log('[OAuth Callback] ✅ Session stored in shopify_sessions by Shopify library');
     }
 
     // Redirect to app with session - Shopify handles embedded app redirect

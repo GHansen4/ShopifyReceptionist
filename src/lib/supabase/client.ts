@@ -1,12 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { env } from '../env';
+import type { Database } from '../../types/supabase-generated';
 
 let supabaseClient: ReturnType<typeof createClient> | null = null;
 let supabaseAdminClient: ReturnType<typeof createClient> | null = null;
 
 export function getSupabaseClient() {
   if (!supabaseClient) {
-    supabaseClient = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
+    supabaseClient = createClient<Database>(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
   }
   return supabaseClient;
 }
@@ -22,14 +23,7 @@ export function getSupabaseClient() {
  */
 export function getSupabaseAdmin() {
   if (!supabaseAdminClient) {
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
-    if (!serviceRoleKey) {
-      console.warn('[Supabase Admin] SUPABASE_SERVICE_ROLE_KEY not found. Admin client unavailable.');
-      throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for admin operations');
-    }
-    
-    supabaseAdminClient = createClient(process.env.SUPABASE_URL!, serviceRoleKey, {
+    supabaseAdminClient = createClient<Database>(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -41,21 +35,6 @@ export function getSupabaseAdmin() {
   return supabaseAdminClient;
 }
 
-// Use Proxy for lazy initialization to avoid build-time errors
-export const supabase = new Proxy({} as ReturnType<typeof createClient>, {
-  get(_target, prop) {
-    const client = getSupabaseClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const value = (client as any)[prop];
-    return typeof value === 'function' ? value.bind(client) : value;
-  }
-});
-
-export const supabaseAdmin = new Proxy({} as ReturnType<typeof createClient>, {
-  get(_target, prop) {
-    const client = getSupabaseAdmin();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const value = (client as any)[prop];
-    return typeof value === 'function' ? value.bind(client) : value;
-  }
-});
+// Direct exports for typed clients
+export const supabase = getSupabaseClient();
+export const supabaseAdmin = getSupabaseAdmin();
